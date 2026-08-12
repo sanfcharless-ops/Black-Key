@@ -6,134 +6,218 @@
 <title>Falling Piano</title>
 <style>
   :root {
-    --bg: #16161a;
-    --panel: #1e1e24;
-    --accent: #4a8fe7;
-    --text: #eaeaea;
-    --muted: #9a9aa5;
+    --bg: #050403;
+    --panel: #0d0b09;
+    --panel-2: #131110;
+    --accent: #a97c50;
+    --accent-dim: #6b5138;
+    --text: #f2ede4;
+    --muted: #8c8378;
+    --border: rgba(255,255,255,0.07);
   }
   * { box-sizing: border-box; }
-  body {
+  html, body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg);
     color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Landing ---------- */
+  #landing {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2rem 1rem;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    transition: opacity 0.5s ease, transform 0.5s ease;
   }
-  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
-  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 1.5rem; font-size: 0.9rem; }
-  .panel {
+  #landing.hidden { display: none; }
+  #landing h1 {
+    font-size: clamp(2.5rem, 6vw, 4.2rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+    background: linear-gradient(180deg, #fff, var(--muted));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  #landing p {
+    font-size: 1.15rem;
+    color: var(--muted);
+    max-width: 32rem;
+    margin: 0 0 2.5rem;
+    line-height: 1.6;
+  }
+  .cta {
+    background: var(--accent);
+    color: #12100d;
+    border: none;
+    padding: 0.9rem 2.2rem;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .cta:hover { background: #bf9066; transform: translateY(-1px); }
+  .cta:active { transform: translateY(0); }
+
+  /* ---------- App ---------- */
+  #app {
+    display: none;
+    min-height: 100vh;
+    padding: 3rem 1.5rem 4rem;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  #app.visible { display: flex; }
+  .container { width: 100%; max-width: 760px; }
+  .app-title { font-size: 1.05rem; font-weight: 600; margin: 0 0 0.25rem; letter-spacing: -0.01em; }
+  .app-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 2rem; }
+
+  .card {
     background: var(--panel);
-    border-radius: 12px;
-    padding: 1.5rem;
-    width: 100%;
-    max-width: 720px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
   }
+
   .upload-zone {
-    border: 2px dashed #3a3a44;
-    border-radius: 10px;
-    padding: 2.5rem 1rem;
+    border: 1px dashed rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 3rem 1rem;
     text-align: center;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
-  .upload-zone:hover { border-color: var(--accent); }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(169,124,80,0.04); }
   .upload-zone input { display: none; }
-  button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 0.6rem 1.2rem;
-    font-size: 0.95rem;
+  .upload-zone .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.4rem; }
+
+  button.control {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.9rem;
     cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.ghost { background: transparent; border: 1px solid #3a3a44; color: var(--text); }
+  button.control:hover { border-color: var(--accent-dim); }
+  button.control.primary { background: var(--accent); color: #12100d; border-color: var(--accent); font-weight: 600; }
+  button.control.primary:hover { background: #bf9066; }
+  button.control:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #controls {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin: 1.25rem 0 1rem;
+    flex-wrap: wrap;
+  }
+  select.control {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
   #stage {
     position: relative;
     width: 100%;
-    height: 320px;
-    background: #0f0f13;
-    border-radius: 8px 8px 0 0;
+    height: 300px;
+    background: #08070609;
+    background: #08070f;
+    border-radius: 12px 12px 0 0;
     overflow: hidden;
-    margin-top: 1rem;
     display: none;
   }
   #keyboard {
     position: relative;
     width: 100%;
-    height: 90px;
-    background: #0f0f13;
-    border-radius: 0 0 8px 8px;
+    height: 84px;
+    background: #08070f;
+    border-radius: 0 0 12px 12px;
     display: none;
-    border-top: 2px solid #000;
+    border-top: 1px solid rgba(0,0,0,0.5);
   }
   .white-key {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    background: #f4f4f4;
-    border: 1px solid #1a1a1e;
+    position: absolute; top: 0; height: 100%;
+    background: #efe9de;
+    border: 1px solid #0a0908;
     border-radius: 0 0 4px 4px;
+    transition: background 0.05s ease;
   }
   .black-key {
-    position: absolute;
-    top: 0;
-    height: 60%;
-    background: #1a1a1e;
+    position: absolute; top: 0; height: 60%;
+    background: #17140f;
     border-radius: 0 0 3px 3px;
     z-index: 2;
+    transition: background 0.05s ease;
   }
-  .white-key.lit { background: #bcdcff; }
-  .black-key.lit { background: #4a8fe7; }
-  #controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 1rem;
-    display: none;
-  }
-  #status { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; min-height: 1.2em; }
-  select { background: var(--panel); color: var(--text); border: 1px solid #3a3a44; border-radius: 6px; padding: 4px 8px; }
+  .white-key.lit { background: #d9b892; }
+  .black-key.lit { background: var(--accent); }
+
+  #status { color: var(--muted); font-size: 0.85rem; margin-top: 1rem; min-height: 1.2em; }
 </style>
 </head>
 <body>
 
-<h1>Falling Piano</h1>
-<p class="sub">Upload a piano recording. We'll transcribe it and show it as falling notes.</p>
+<div id="landing">
+  <h1>Falling Piano</h1>
+  <p>Upload a piano recording and watch it fall into place, note by note, played back exactly as you recorded it.</p>
+  <button class="cta" id="getStarted">Get started</button>
+</div>
 
-<div class="panel">
-  <div class="upload-zone" id="dropZone">
-    <input type="file" id="fileInput" accept="audio/*" />
-    <div id="dropLabel">Click to choose an audio file, or drag one here<br /><small style="color:var(--muted)">MP3, WAV, M4A — up to 25MB</small></div>
+<div id="app">
+  <div class="container">
+    <p class="app-title">Falling Piano</p>
+    <p class="app-sub">Upload a piano recording to transcribe it</p>
+
+    <div class="card">
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="audio/*" />
+        <div>Click to choose an audio file, or drag one here</div>
+        <div class="hint">MP3, WAV, M4A — up to 25MB</div>
+      </div>
+
+      <div id="controls">
+        <button class="control primary" id="playBtn">Play</button>
+        <select class="control" id="speedSelect">
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+        </select>
+        <button class="control" id="transposeBtn" title="Paid feature">Transpose (Pro)</button>
+      </div>
+
+      <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
+      <div id="keyboard"></div>
+      <div id="status"></div>
+      <audio id="player" style="display:none"></audio>
+    </div>
   </div>
-
-  <div id="controls">
-    <button id="playBtn">Play</button>
-    <label style="font-size:0.85rem; color:var(--muted);">Speed
-      <select id="speedSelect">
-        <option value="0.5">0.5x</option>
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-      </select>
-    </label>
-    <button class="ghost" id="transposeBtn" title="Paid feature">Transpose (Pro)</button>
-  </div>
-
-  <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
-  <div id="keyboard"></div>
-  <div id="status"></div>
 </div>
 
 <script>
-// Point this at your deployed backend once it's live.
+// Point this at your deployed backend.
 const API_URL = "https://black-key-production.up.railway.app";
+
+const landing = document.getElementById("landing");
+const app = document.getElementById("app");
+document.getElementById("getStarted").addEventListener("click", () => {
+  landing.classList.add("hidden");
+  app.classList.add("visible");
+});
 
 const fileInput = document.getElementById("fileInput");
 const dropZone = document.getElementById("dropZone");
@@ -143,28 +227,36 @@ const lanes = document.getElementById("lanes");
 const controls = document.getElementById("controls");
 const playBtn = document.getElementById("playBtn");
 const speedSelect = document.getElementById("speedSelect");
+const player = document.getElementById("player");
 
 dropZone.addEventListener("click", () => fileInput.click());
 dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "var(--accent)"; });
-dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "#3a3a44"; });
+dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "rgba(255,255,255,0.15)"; });
 dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
-  dropZone.style.borderColor = "#3a3a44";
+  dropZone.style.borderColor = "rgba(255,255,255,0.15)";
   if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener("change", () => {
   if (fileInput.files.length) handleFile(fileInput.files[0]);
 });
 
-let currentNotes = [];
+const MIN_PITCH = 21, MAX_PITCH = 108;
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
+function pitchName(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
+
 let playing = false;
 let animFrame;
-let startTime = 0;
 
 async function handleFile(file) {
   statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
   stage.style.display = "none";
   controls.style.display = "none";
+  document.getElementById("keyboard").style.display = "none";
+
+  // Play back the real file the person uploaded, not a synthesized guess.
+  player.src = URL.createObjectURL(file);
 
   const formData = new FormData();
   formData.append("file", file);
@@ -176,32 +268,24 @@ async function handleFile(file) {
       throw new Error(err.detail || `Server error (${res.status})`);
     }
     const data = await res.json();
-    currentNotes = data.notes;
     statusEl.textContent = `Done. ${data.notes.length} notes detected. ${data.uses_remaining} free uses left this month.`;
-    renderNotes(currentNotes, data.duration_seconds);
+    renderNotes(data.notes);
     stage.style.display = "block";
+    document.getElementById("keyboard").style.display = "block";
     controls.style.display = "flex";
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
   }
 }
 
-const MIN_PITCH = 21, MAX_PITCH = 108; // full 88-key piano range
-const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
-
-function pitchName(midi) {
-  return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
-}
-
-function renderNotes(notes, durationSeconds) {
+function renderNotes(notes) {
   lanes.innerHTML = "";
   const laneCount = MAX_PITCH - MIN_PITCH + 1;
-  const stageWidth = 700, stageHeight = 320;
+  const stageWidth = 700, stageHeight = 300;
   const pxPerSecond = 90;
   lanes.setAttribute("viewBox", `0 0 ${stageWidth} ${stageHeight}`);
-
   const laneWidth = stageWidth / laneCount;
+
   notes.forEach((n) => {
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     const x = (n.pitch - MIN_PITCH) * laneWidth;
@@ -210,7 +294,7 @@ function renderNotes(notes, durationSeconds) {
     rect.setAttribute("width", Math.max(2, laneWidth - 2));
     rect.setAttribute("height", h);
     rect.setAttribute("rx", 2);
-    rect.setAttribute("fill", IS_BLACK[n.pitch % 12] ? "#e79a4a" : "#4a8fe7");
+    rect.setAttribute("fill", IS_BLACK[n.pitch % 12] ? "#c98a4a" : "#a97c50");
     rect.setAttribute("data-y0", -(h + n.start_time * pxPerSecond));
     rect.setAttribute("data-pitch", n.pitch);
     rect.setAttribute("data-start", n.start_time);
@@ -223,14 +307,13 @@ function renderNotes(notes, durationSeconds) {
 
   if (notes.length) {
     const firstFew = notes.slice(0, 8).map(n => pitchName(n.pitch)).join(", ");
-    document.getElementById("status").textContent += ` First notes detected: ${firstFew}${notes.length > 8 ? "..." : ""}`;
+    statusEl.textContent += ` First notes detected: ${firstFew}${notes.length > 8 ? "..." : ""}`;
   }
 }
 
 function renderKeyboard() {
   const kb = document.getElementById("keyboard");
   kb.innerHTML = "";
-  kb.style.display = "block";
   const whiteKeys = [];
   for (let p = MIN_PITCH; p <= MAX_PITCH; p++) if (!IS_BLACK[p % 12]) whiteKeys.push(p);
   const whiteWidth = 100 / whiteKeys.length;
@@ -256,40 +339,54 @@ function renderKeyboard() {
   }
 }
 
-function updateKeyboardLighting(elapsedSeconds) {
-  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit"));
-  document.querySelectorAll("#lanes rect").forEach((rect) => {
-    const start = parseFloat(rect.getAttribute("data-start"));
-    const end = parseFloat(rect.getAttribute("data-end"));
-    if (elapsedSeconds >= start && elapsedSeconds <= end) {
-      const pitch = rect.getAttribute("data-pitch");
-      const keyEl = document.querySelector(`[data-pitch="${pitch}"]`);
-      if (keyEl) keyEl.classList.add("lit");
-    }
-  });
-}
-
+// Playback is driven entirely by the audio element's own clock, so
+// pausing and resuming naturally stays where you left off instead of
+// jumping back to the start.
 playBtn.addEventListener("click", () => {
-  playing = !playing;
-  playBtn.textContent = playing ? "Pause" : "Play";
   if (playing) {
-    startTime = performance.now();
-    tick();
+    player.pause();
   } else {
-    cancelAnimationFrame(animFrame);
+    player.play();
   }
 });
 
+player.addEventListener("play", () => {
+  playing = true;
+  playBtn.textContent = "Pause";
+  tick();
+});
+player.addEventListener("pause", () => {
+  playing = false;
+  playBtn.textContent = "Play";
+  cancelAnimationFrame(animFrame);
+});
+player.addEventListener("ended", () => {
+  playing = false;
+  playBtn.textContent = "Play";
+});
+
+speedSelect.addEventListener("change", () => {
+  player.playbackRate = parseFloat(speedSelect.value);
+});
+
 function tick() {
-  const speed = parseFloat(speedSelect.value);
-  const elapsed = ((performance.now() - startTime) / 1000) * speed;
-  const stageHeight = 320;
+  const elapsed = player.currentTime;
+  const stageHeight = 300;
   const pxPerSecond = 90;
   document.querySelectorAll("#lanes rect").forEach((rect) => {
     const y0 = parseFloat(rect.getAttribute("data-y0"));
     rect.setAttribute("y", y0 + elapsed * pxPerSecond + stageHeight);
   });
-  updateKeyboardLighting(elapsed);
+  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit"));
+  document.querySelectorAll("#lanes rect").forEach((rect) => {
+    const start = parseFloat(rect.getAttribute("data-start"));
+    const end = parseFloat(rect.getAttribute("data-end"));
+    if (elapsed >= start && elapsed <= end) {
+      const pitch = rect.getAttribute("data-pitch");
+      const keyEl = document.querySelector(`[data-pitch="${pitch}"]`);
+      if (keyEl) keyEl.classList.add("lit");
+    }
+  });
   if (playing) animFrame = requestAnimationFrame(tick);
 }
 
