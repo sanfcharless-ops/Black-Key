@@ -99,6 +99,51 @@
   .upload-zone input { display: none; }
   .upload-zone .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.4rem; }
 
+  #seekRow {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.75rem;
+  }
+  #seekTime { font-size: 0.78rem; color: var(--muted); min-width: 38px; }
+  input[type="range"]#seekbar {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--panel-2) 0%, var(--panel-2) 100%);
+    outline: none;
+  }
+  input[type="range"]#seekbar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #12100d;
+    cursor: pointer;
+    transition: background 0.1s ease, transform 0.1s ease;
+  }
+  input[type="range"]#seekbar.dragging::-webkit-slider-thumb {
+    background: #f2ede4;
+    transform: scale(1.3);
+  }
+  input[type="range"]#seekbar::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #12100d;
+    cursor: pointer;
+  }
+  input[type="range"]#seekbar.dragging::-moz-range-thumb { background: #f2ede4; }
+
+  #videoPreview {
+    width: 100%;
+    max-height: 220px;
+    border-radius: 12px 12px 0 0;
+    display: none;
+    background: #000;
+  }
+
   button.control {
     background: var(--panel-2);
     color: var(--text);
@@ -184,10 +229,12 @@
 
     <div class="card">
       <div class="upload-zone" id="dropZone">
-        <input type="file" id="fileInput" accept="audio/*" />
-        <div>Click to choose an audio file, or drag one here</div>
-        <div class="hint">MP3, WAV, M4A — up to 25MB</div>
+        <input type="file" id="fileInput" accept="audio/*,video/*" />
+        <div>Click to choose a file, or drag one here</div>
+        <div class="hint">MP3, WAV, M4A, MP4, MOV — up to 60MB</div>
       </div>
+
+      <video id="videoPreview" playsinline></video>
 
       <div id="controls">
         <button class="control primary" id="playBtn">Play</button>
@@ -198,6 +245,12 @@
           <option value="1.25">1.25x</option>
         </select>
         <button class="control" id="transposeBtn" title="Paid feature">Transpose (Pro)</button>
+      </div>
+
+      <div id="seekRow">
+        <span id="seekTime">0:00</span>
+        <input type="range" id="seekbar" min="0" max="100" value="0" step="0.1" />
+        <span id="seekDuration">0:00</span>
       </div>
 
       <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
@@ -245,18 +298,49 @@ const MIN_PITCH = 21, MAX_PITCH = 108;
 const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
 function pitchName(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
+function fmtTime(s) {
+  if (!isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+const videoPreview = document.getElementById("videoPreview");
+const seekRow = document.getElementById("seekRow");
+const seekbar = document.getElementById("seekbar");
+const seekTime = document.getElementById("seekTime");
+const seekDuration = document.getElementById("seekDuration");
 
 let playing = false;
 let animFrame;
+let activePlayer = player; // switches to videoPreview when the upload is a video
+let seeking = false;
+
+const VIDEO_EXT = [".mp4", ".mov", ".m4v", ".webm"];
 
 async function handleFile(file) {
   statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
   stage.style.display = "none";
   controls.style.display = "none";
+  seekRow.style.display = "none";
   document.getElementById("keyboard").style.display = "none";
 
-  // Play back the real file the person uploaded, not a synthesized guess.
-  player.src = URL.createObjectURL(file);
+  const isVideo = VIDEO_EXT.some(ext => file.name.toLowerCase().endsWith(ext)) || file.type.startsWith("video/");
+  const objectUrl = URL.createObjectURL(file);
+
+  if (isVideo) {
+    videoPreview.src = objectUrl;
+    videoPreview.style.display = "block";
+    player.style.display = "none";
+    activePlayer = videoPreview;
+  } else {
+    player.src = objectUrl;
+    videoPreview.style.display = "none";
+    activePlayer = player;
+  }
+  if (!activePlayer.dataset.bound) {
+    bindPlayerEvents(activePlayer);
+    activePlayer.dataset.bound = "true";
+  }
 
   const formData = new FormData();
   formData.append("file", file);
@@ -273,6 +357,7 @@ async function handleFile(file) {
     stage.style.display = "block";
     document.getElementById("keyboard").style.display = "block";
     controls.style.display = "flex";
+    seekRow.style.display = "flex";
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
   }
@@ -339,38 +424,70 @@ function renderKeyboard() {
   }
 }
 
-// Playback is driven entirely by the audio element's own clock, so
-// pausing and resuming naturally stays where you left off instead of
-// jumping back to the start.
+// Playback is driven entirely by the active element's own clock, so
+// pausing and resuming naturally stays where you left off, and video
+// files stay in sync with the falling notes the same way audio does.
 playBtn.addEventListener("click", () => {
   if (playing) {
-    player.pause();
+    activePlayer.pause();
   } else {
-    player.play();
+    activePlayer.play();
   }
 });
 
-player.addEventListener("play", () => {
-  playing = true;
-  playBtn.textContent = "Pause";
-  tick();
+function bindPlayerEvents(el) {
+  el.addEventListener("play", () => {
+    playing = true;
+    playBtn.textContent = "Pause";
+    tick();
+  });
+  el.addEventListener("pause", () => {
+    playing = false;
+    playBtn.textContent = "Play";
+    cancelAnimationFrame(animFrame);
+  });
+  el.addEventListener("ended", () => {
+    playing = false;
+    playBtn.textContent = "Play";
+  });
+  el.addEventListener("loadedmetadata", () => {
+    seekbar.max = el.duration || 0;
+    seekDuration.textContent = fmtTime(el.duration);
+  });
+  el.addEventListener("timeupdate", () => {
+    if (seeking) return;
+    seekbar.value = el.currentTime;
+    seekTime.textContent = fmtTime(el.currentTime);
+    updateSeekFill();
+  });
+}
+
+function updateSeekFill() {
+  const pct = seekbar.max > 0 ? (seekbar.value / seekbar.max) * 100 : 0;
+  seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
+}
+
+seekbar.addEventListener("mousedown", () => { seeking = true; seekbar.classList.add("dragging"); });
+seekbar.addEventListener("touchstart", () => { seeking = true; seekbar.classList.add("dragging"); });
+seekbar.addEventListener("input", () => {
+  seekTime.textContent = fmtTime(parseFloat(seekbar.value));
+  updateSeekFill();
+  positionNotesAt(parseFloat(seekbar.value));
 });
-player.addEventListener("pause", () => {
-  playing = false;
-  playBtn.textContent = "Play";
-  cancelAnimationFrame(animFrame);
-});
-player.addEventListener("ended", () => {
-  playing = false;
-  playBtn.textContent = "Play";
-});
+function commitSeek() {
+  activePlayer.currentTime = parseFloat(seekbar.value);
+  seeking = false;
+  seekbar.classList.remove("dragging");
+}
+seekbar.addEventListener("mouseup", commitSeek);
+seekbar.addEventListener("touchend", commitSeek);
+seekbar.addEventListener("change", commitSeek);
 
 speedSelect.addEventListener("change", () => {
-  player.playbackRate = parseFloat(speedSelect.value);
+  activePlayer.playbackRate = parseFloat(speedSelect.value);
 });
 
-function tick() {
-  const elapsed = player.currentTime;
+function positionNotesAt(elapsed) {
   const stageHeight = 300;
   const pxPerSecond = 90;
   document.querySelectorAll("#lanes rect").forEach((rect) => {
@@ -387,6 +504,10 @@ function tick() {
       if (keyEl) keyEl.classList.add("lit");
     }
   });
+}
+
+function tick() {
+  positionNotesAt(activePlayer.currentTime);
   if (playing) animFrame = requestAnimationFrame(tick);
 }
 
