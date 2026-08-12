@@ -190,8 +190,6 @@
   input[type="range"]#seekbar.dragging::-webkit-slider-thumb {
     background: #fff;
     transform: scale(1.35);
-    animation: hueSpin 1.4s linear infinite;
-    box-shadow: 0 0 10px 2px currentColor;
   }
   input[type="range"]#seekbar::-moz-range-thumb {
     width: 15px; height: 15px;
@@ -202,11 +200,6 @@
   }
   input[type="range"]#seekbar.dragging::-moz-range-thumb {
     background: #fff;
-    animation: hueSpin 1.4s linear infinite;
-  }
-  @keyframes hueSpin {
-    0% { filter: hue-rotate(0deg) saturate(2); }
-    100% { filter: hue-rotate(360deg) saturate(2); }
   }
 
   #videoPreview {
@@ -736,13 +729,7 @@ function bindPlayerEvents(el) {
 
 function updateSeekFill() {
   const pct = seekbar.max > 0 ? (seekbar.value / seekbar.max) * 100 : 0;
-  if (seekbar.classList.contains("dragging")) {
-    seekbar.style.background =
-      `linear-gradient(to right, #ff3b30 0%, #ff9500 16%, #ffcc00 32%, #34c759 48%, ` +
-      `#5cb8e4 64%, #5856d6 80%, #af52de 100%) 0 0 / ${Math.max(pct, 0.001)}% 100% no-repeat, var(--panel-2)`;
-  } else {
-    seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
-  }
+  seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
 }
 
 seekbar.addEventListener("mousedown", () => { seeking = true; seekbar.classList.add("dragging"); updateSeekFill(); });
