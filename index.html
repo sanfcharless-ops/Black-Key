@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Falling Piano</title>
+<style>
+  :root {
+    --bg: #16161a;
+    --panel: #1e1e24;
+    --accent: #4a8fe7;
+    --text: #eaeaea;
+    --muted: #9a9aa5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
+  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .panel {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 720px;
+  }
+  .upload-zone {
+    border: 2px dashed #3a3a44;
+    border-radius: 10px;
+    padding: 2.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .upload-zone:hover { border-color: var(--accent); }
+  .upload-zone input { display: none; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.ghost { background: transparent; border: 1px solid #3a3a44; color: var(--text); }
+  #stage {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    background: #0f0f13;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 1rem;
+    display: none;
+  }
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 1rem;
+    display: none;
+  }
+  #status { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; min-height: 1.2em; }
+  select { background: var(--panel); color: var(--text); border: 1px solid #3a3a44; border-radius: 6px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+
+<h1>Falling Piano</h1>
+<p class="sub">Upload a piano recording. We'll transcribe it and show it as falling notes.</p>
+
+<div class="panel">
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="audio/*" />
+    <div id="dropLabel">Click to choose an audio file, or drag one here<br /><small style="color:var(--muted)">MP3, WAV, M4A — up to 25MB</small></div>
+  </div>
+
+  <div id="controls">
+    <button id="playBtn">Play</button>
+    <label style="font-size:0.85rem; color:var(--muted);">Speed
+      <select id="speedSelect">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+      </select>
+    </label>
+    <button class="ghost" id="transposeBtn" title="Paid feature">Transpose (Pro)</button>
+  </div>
+
+  <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
+  <div id="status"></div>
+</div>
+
+<script>
+// Point this at your deployed backend once it's live.
+const API_URL = "http://localhost:8000";
+
+const fileInput = document.getElementById("fileInput");
+const dropZone = document.getElementById("dropZone");
+const statusEl = document.getElementById("status");
+const stage = document.getElementById("stage");
+const lanes = document.getElementById("lanes");
+const controls = document.getElementById("controls");
+const playBtn = document.getElementById("playBtn");
+const speedSelect = document.getElementById("speedSelect");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "var(--accent)"; });
+dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "#3a3a44"; });
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.style.borderColor = "#3a3a44";
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+let currentNotes = [];
+let playing = false;
+let animFrame;
+let startTime = 0;
+
+async function handleFile(file) {
+  statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
+  stage.style.display = "none";
+  controls.style.display = "none";
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch(`${API_URL}/transcribe`, { method: "POST", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error (${res.status})`);
+    }
+    const data = await res.json();
+    currentNotes = data.notes;
+    statusEl.textContent = `Done. ${data.notes.length} notes detected. ${data.uses_remaining} free uses left this month.`;
+    renderNotes(currentNotes, data.duration_seconds);
+    stage.style.display = "block";
+    controls.style.display = "flex";
+  } catch (err) {
+    statusEl.textContent = `Something went wrong: ${err.message}`;
+  }
+}
+
+function renderNotes(notes, durationSeconds) {
+  lanes.innerHTML = "";
+  const minPitch = 21, maxPitch = 108; // full piano range
+  const laneCount = maxPitch - minPitch + 1;
+  const stageWidth = 700, stageHeight = 320;
+  const pxPerSecond = 90;
+  lanes.setAttribute("viewBox", `0 0 ${stageWidth} ${stageHeight}`);
+
+  const laneWidth = stageWidth / laneCount;
+  notes.forEach((n) => {
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const x = (n.pitch - minPitch) * laneWidth;
+    const h = Math.max(4, n.duration * pxPerSecond);
+    rect.setAttribute("x", x + 1);
+    rect.setAttribute("width", Math.max(2, laneWidth - 2));
+    rect.setAttribute("height", h);
+    rect.setAttribute("rx", 2);
+    rect.setAttribute("fill", "#4a8fe7");
+    rect.setAttribute("data-y0", -(h + n.start_time * pxPerSecond));
+    rect.setAttribute("y", rect.getAttribute("data-y0"));
+    lanes.appendChild(rect);
+  });
+}
+
+playBtn.addEventListener("click", () => {
+  playing = !playing;
+  playBtn.textContent = playing ? "Pause" : "Play";
+  if (playing) {
+    startTime = performance.now();
+    tick();
+  } else {
+    cancelAnimationFrame(animFrame);
+  }
+});
+
+function tick() {
+  const speed = parseFloat(speedSelect.value);
+  const elapsed = ((performance.now() - startTime) / 1000) * speed;
+  const stageHeight = 320;
+  const pxPerSecond = 90;
+  document.querySelectorAll("#lanes rect").forEach((rect) => {
+    const y0 = parseFloat(rect.getAttribute("data-y0"));
+    rect.setAttribute("y", y0 + elapsed * pxPerSecond + stageHeight);
+  });
+  if (playing) animFrame = requestAnimationFrame(tick);
+}
+
+document.getElementById("transposeBtn").addEventListener("click", () => {
+  alert("Transposing is a paid feature. Hook this up to your upgrade/checkout flow.");
+});
+</script>
+</body>
+</html>
