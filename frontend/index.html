@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Falling Piano</title>
+<title>Key Rain Drops</title>
 <style>
   :root {
     --bg: #16161a;
@@ -77,8 +77,8 @@
 </head>
 <body>
 
-<h1>Falling Piano</h1>
-<p class="sub">Upload a piano recording. We'll transcribe it and show it as falling notes.</p>
+<h1>Key Rain Drops</h1>
+<p class="sub">Upload a piano recording. We'll transcribe it and show it as Raindrop notes.</p>
 
 <div class="panel">
   <div class="upload-zone" id="dropZone">
@@ -105,7 +105,7 @@
 
 <script>
 // Point this at your deployed backend once it's live.
-const API_URL = "http://localhost:8000";
+const API_URL = "https://black-key-production.up.railway.app";
 
 const fileInput = document.getElementById("fileInput");
 const dropZone = document.getElementById("dropZone");
