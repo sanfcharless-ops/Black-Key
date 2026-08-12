@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Falling Piano</title>
+<title>Black Key</title>
 <style>
   :root {
     --bg: #050403;
@@ -14,6 +14,9 @@
     --text: #f2ede4;
     --muted: #8c8378;
     --border: rgba(255,255,255,0.07);
+    --hand-left: #d9a05b;   /* warm amber — left hand */
+    --hand-right: #5cb8e4;  /* cool glass blue — right hand */
+    --glass-hi: rgba(255,255,255,0.55);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -34,17 +37,28 @@
     text-align: center;
     padding: 2rem;
     transition: opacity 0.5s ease, transform 0.5s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  #landing::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 30% 20%, rgba(92,184,228,0.10), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 75% 75%, rgba(217,160,91,0.10), transparent 60%);
+    pointer-events: none;
   }
   #landing.hidden { display: none; }
   #landing h1 {
-    font-size: clamp(2.5rem, 6vw, 4.2rem);
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    font-size: clamp(2.8rem, 7vw, 4.6rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
     margin: 0 0 1rem;
-    background: linear-gradient(180deg, #fff, var(--muted));
+    background: linear-gradient(135deg, #fff 0%, var(--hand-right) 55%, var(--hand-left) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    position: relative;
   }
   #landing p {
     font-size: 1.15rem;
@@ -52,6 +66,7 @@
     max-width: 32rem;
     margin: 0 0 2.5rem;
     line-height: 1.6;
+    position: relative;
   }
   .cta {
     background: var(--accent);
@@ -62,7 +77,9 @@
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.15s ease, background 0.15s ease;
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+    box-shadow: 0 8px 24px -8px rgba(169,124,80,0.5);
   }
   .cta:hover { background: #bf9066; transform: translateY(-1px); }
   .cta:active { transform: translateY(0); }
@@ -76,8 +93,13 @@
     justify-content: center;
   }
   #app.visible { display: flex; }
-  .container { width: 100%; max-width: 760px; }
-  .app-title { font-size: 1.05rem; font-weight: 600; margin: 0 0 0.25rem; letter-spacing: -0.01em; }
+  .container { width: 100%; max-width: 780px; }
+  .app-title {
+    font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem; letter-spacing: -0.01em;
+    background: linear-gradient(90deg, #fff, var(--hand-right));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    display: inline-block;
+  }
   .app-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 2rem; }
 
   .card {
@@ -86,6 +108,29 @@
     border-radius: 16px;
     padding: 1.75rem;
   }
+
+  /* ---------- Source tabs (file vs TikTok link) ---------- */
+  #sourceTabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    background: var(--panel-2);
+    border-radius: 10px;
+    padding: 0.3rem;
+  }
+  .source-tab {
+    flex: 1;
+    text-align: center;
+    padding: 0.55rem 0.6rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    user-select: none;
+  }
+  .source-tab.active { background: var(--accent); color: #12100d; }
 
   .upload-zone {
     border: 1px dashed rgba(255,255,255,0.15);
@@ -99,6 +144,21 @@
   .upload-zone input { display: none; }
   .upload-zone .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.4rem; }
 
+  #linkPane { display: none; }
+  #linkPane .link-row { display: flex; gap: 0.6rem; }
+  #tiktokUrl {
+    flex: 1;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  #tiktokUrl:focus { border-color: var(--accent-dim); }
+  #linkPane .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.6rem; }
+
   #seekRow {
     display: none;
     align-items: center;
@@ -109,32 +169,45 @@
   input[type="range"]#seekbar {
     flex: 1;
     -webkit-appearance: none;
-    height: 4px;
+    height: 5px;
     border-radius: 999px;
     background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--panel-2) 0%, var(--panel-2) 100%);
     outline: none;
+    transition: box-shadow 0.15s ease;
   }
   input[type="range"]#seekbar::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px; height: 14px;
+    width: 15px; height: 15px;
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid #12100d;
     cursor: pointer;
-    transition: background 0.1s ease, transform 0.1s ease;
+    transition: background 0.1s ease, transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  input[type="range"]#seekbar.dragging {
+    box-shadow: 0 0 14px 1px rgba(255,255,255,0.15);
   }
   input[type="range"]#seekbar.dragging::-webkit-slider-thumb {
-    background: #f2ede4;
-    transform: scale(1.3);
+    background: #fff;
+    transform: scale(1.35);
+    animation: hueSpin 1.4s linear infinite;
+    box-shadow: 0 0 10px 2px currentColor;
   }
   input[type="range"]#seekbar::-moz-range-thumb {
-    width: 14px; height: 14px;
+    width: 15px; height: 15px;
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid #12100d;
     cursor: pointer;
   }
-  input[type="range"]#seekbar.dragging::-moz-range-thumb { background: #f2ede4; }
+  input[type="range"]#seekbar.dragging::-moz-range-thumb {
+    background: #fff;
+    animation: hueSpin 1.4s linear infinite;
+  }
+  @keyframes hueSpin {
+    0% { filter: hue-rotate(0deg) saturate(2); }
+    100% { filter: hue-rotate(360deg) saturate(2); }
+  }
 
   #videoPreview {
     width: 100%;
@@ -175,41 +248,108 @@
     font-size: 0.85rem;
   }
 
+  /* ---------- Transpose stepper ---------- */
+  #transposeGroup {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  #transposeGroup button {
+    background: transparent;
+    color: var(--text);
+    border: none;
+    padding: 0.55rem 0.8rem;
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+  #transposeGroup button:hover { background: rgba(255,255,255,0.06); }
+  #transposeLabel {
+    font-size: 0.82rem;
+    color: var(--muted);
+    padding: 0 0.5rem;
+    min-width: 76px;
+    text-align: center;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  #transposeLabel b { color: var(--text); }
+
+  /* ---------- Background image control ---------- */
+  #bgRow {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  #bgRow input[type="file"] { display: none; }
+  #bgOpacity { width: 110px; accent-color: var(--accent); }
+  #bgOpacityLabel { font-size: 0.78rem; color: var(--muted); min-width: 34px; }
+  #bgClear { display: none; }
+
+  /* ---------- Stage ---------- */
   #stage {
     position: relative;
     width: 100%;
-    height: 300px;
-    background: #08070609;
+    height: 320px;
     background: #08070f;
     border-radius: 12px 12px 0 0;
     overflow: hidden;
     display: none;
   }
+  #stageBg {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    filter: saturate(0.85) brightness(0.55);
+  }
+  #stage svg { position: relative; z-index: 1; }
+  #stage::after {
+    /* subtle vignette + hit-line glow for depth */
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+    z-index: 2;
+  }
+
   #keyboard {
     position: relative;
     width: 100%;
-    height: 84px;
-    background: #08070f;
+    height: 92px;
+    background: linear-gradient(180deg, #0c0a0f, #050408);
     border-radius: 0 0 12px 12px;
     display: none;
-    border-top: 1px solid rgba(0,0,0,0.5);
+    border-top: 1px solid rgba(0,0,0,0.6);
+    box-shadow: inset 0 3px 10px rgba(0,0,0,0.5);
   }
   .white-key {
     position: absolute; top: 0; height: 100%;
-    background: #efe9de;
+    background: linear-gradient(180deg, #fdfbf7 0%, #ece4d6 55%, #d8cdbb 100%);
     border: 1px solid #0a0908;
-    border-radius: 0 0 4px 4px;
-    transition: background 0.05s ease;
+    border-right: 1px solid rgba(0,0,0,0.35);
+    border-radius: 0 0 5px 5px;
+    box-shadow: inset 0 -6px 8px -4px rgba(0,0,0,0.25);
+    transition: background 0.08s ease, box-shadow 0.08s ease;
   }
   .black-key {
-    position: absolute; top: 0; height: 60%;
-    background: #17140f;
-    border-radius: 0 0 3px 3px;
+    position: absolute; top: 0; height: 62%;
+    background: linear-gradient(180deg, #2b2620 0%, #17140f 45%, #0a0806 100%);
+    border-radius: 0 0 4px 4px;
+    box-shadow: inset 0 -4px 6px -2px rgba(0,0,0,0.6), inset 0 2px 1px rgba(255,255,255,0.08);
     z-index: 2;
-    transition: background 0.05s ease;
+    transition: background 0.08s ease, box-shadow 0.08s ease;
   }
-  .white-key.lit { background: #d9b892; }
-  .black-key.lit { background: var(--accent); }
+  .white-key.lit-left  { background: linear-gradient(180deg, #fff 0%, var(--hand-left) 100%);  box-shadow: 0 0 16px 2px var(--hand-left); }
+  .white-key.lit-right { background: linear-gradient(180deg, #fff 0%, var(--hand-right) 100%); box-shadow: 0 0 16px 2px var(--hand-right); }
+  .black-key.lit-left  { background: linear-gradient(180deg, var(--hand-left) 0%, #6b4a26 100%);  box-shadow: 0 0 14px 2px var(--hand-left); }
+  .black-key.lit-right { background: linear-gradient(180deg, var(--hand-right) 0%, #235c78 100%); box-shadow: 0 0 14px 2px var(--hand-right); }
 
   #status { color: var(--muted); font-size: 0.85rem; margin-top: 1rem; min-height: 1.2em; }
 </style>
@@ -217,21 +357,36 @@
 <body>
 
 <div id="landing">
-  <h1>Falling Piano</h1>
-  <p>Upload a piano recording and watch it fall into place, note by note, played back exactly as you recorded it.</p>
+  <h1>Black Key</h1>
+  <p>Upload a piano recording — or paste a TikTok link — and watch it fall into place, note by note, played back exactly as you recorded it.</p>
   <button class="cta" id="getStarted">Get started</button>
 </div>
 
 <div id="app">
   <div class="container">
-    <p class="app-title">Falling Piano</p>
-    <p class="app-sub">Upload a piano recording to transcribe it</p>
+    <p class="app-title">Black Key</p>
+    <p class="app-sub">Upload a piano recording, or paste a TikTok link, to transcribe it</p>
 
     <div class="card">
-      <div class="upload-zone" id="dropZone">
-        <input type="file" id="fileInput" accept="audio/*,video/*" />
-        <div>Click to choose a file, or drag one here</div>
-        <div class="hint">MP3, WAV, M4A, MP4, MOV — up to 60MB</div>
+      <div id="sourceTabs">
+        <div class="source-tab active" id="tabFile">Upload file</div>
+        <div class="source-tab" id="tabLink">TikTok link</div>
+      </div>
+
+      <div id="filePane">
+        <div class="upload-zone" id="dropZone">
+          <input type="file" id="fileInput" accept="audio/*,video/*" />
+          <div>Click to choose a file, or drag one here</div>
+          <div class="hint">MP3, WAV, M4A, MP4, MOV — up to 60MB</div>
+        </div>
+      </div>
+
+      <div id="linkPane">
+        <div class="link-row">
+          <input type="text" id="tiktokUrl" placeholder="https://www.tiktok.com/@user/video/..." />
+          <button class="control primary" id="tiktokGo">Transcribe</button>
+        </div>
+        <div class="hint">Paste a link to a TikTok piano video. We'll pull the audio and transcribe it the same way.</div>
       </div>
 
       <video id="videoPreview" playsinline></video>
@@ -244,7 +399,19 @@
           <option value="1" selected>1x</option>
           <option value="1.25">1.25x</option>
         </select>
-        <button class="control" id="transposeBtn" title="Paid feature">Transpose (Pro)</button>
+        <div id="transposeGroup">
+          <button id="transposeDown" title="Transpose down a semitone">–</button>
+          <span id="transposeLabel">Transpose <b id="transposeVal">0</b></span>
+          <button id="transposeUp" title="Transpose up a semitone">+</button>
+        </div>
+      </div>
+
+      <div id="bgRow">
+        <label class="control" for="bgInput" style="cursor:pointer;">Background image</label>
+        <input type="file" id="bgInput" accept="image/*" />
+        <span id="bgOpacityLabel">70%</span>
+        <input type="range" id="bgOpacity" min="0" max="100" value="70" />
+        <button class="control" id="bgClear">Remove</button>
       </div>
 
       <div id="seekRow">
@@ -253,7 +420,10 @@
         <span id="seekDuration">0:00</span>
       </div>
 
-      <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
+      <div id="stage">
+        <div id="stageBg"></div>
+        <svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg>
+      </div>
       <div id="keyboard"></div>
       <div id="status"></div>
       <audio id="player" style="display:none"></audio>
@@ -294,7 +464,22 @@ fileInput.addEventListener("change", () => {
   if (fileInput.files.length) handleFile(fileInput.files[0]);
 });
 
+// ---------- Source tabs ----------
+const tabFile = document.getElementById("tabFile");
+const tabLink = document.getElementById("tabLink");
+const filePane = document.getElementById("filePane");
+const linkPane = document.getElementById("linkPane");
+tabFile.addEventListener("click", () => {
+  tabFile.classList.add("active"); tabLink.classList.remove("active");
+  filePane.style.display = "block"; linkPane.style.display = "none";
+});
+tabLink.addEventListener("click", () => {
+  tabLink.classList.add("active"); tabFile.classList.remove("active");
+  linkPane.style.display = "block"; filePane.style.display = "none";
+});
+
 const MIN_PITCH = 21, MAX_PITCH = 108;
+const MIDDLE_C = 60; // heuristic split point for left/right hand coloring
 const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
 function pitchName(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
@@ -303,6 +488,7 @@ function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
+function handFor(pitch) { return pitch >= MIDDLE_C ? "right" : "left"; }
 
 const videoPreview = document.getElementById("videoPreview");
 const seekRow = document.getElementById("seekRow");
@@ -314,15 +500,14 @@ let playing = false;
 let animFrame;
 let activePlayer = player; // switches to videoPreview when the upload is a video
 let seeking = false;
+let rawNotes = [];     // notes exactly as returned by the backend
+let transposeSemitones = 0;
 
 const VIDEO_EXT = [".mp4", ".mov", ".m4v", ".webm"];
 
 async function handleFile(file) {
   statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
-  stage.style.display = "none";
-  controls.style.display = "none";
-  seekRow.style.display = "none";
-  document.getElementById("keyboard").style.display = "none";
+  resetStage();
 
   const isVideo = VIDEO_EXT.some(ext => file.name.toLowerCase().endsWith(ext)) || file.type.startsWith("video/");
   const objectUrl = URL.createObjectURL(file);
@@ -337,10 +522,7 @@ async function handleFile(file) {
     videoPreview.style.display = "none";
     activePlayer = player;
   }
-  if (!activePlayer.dataset.bound) {
-    bindPlayerEvents(activePlayer);
-    activePlayer.dataset.bound = "true";
-  }
+  bindPlayerOnce(activePlayer);
 
   const formData = new FormData();
   formData.append("file", file);
@@ -352,36 +534,118 @@ async function handleFile(file) {
       throw new Error(err.detail || `Server error (${res.status})`);
     }
     const data = await res.json();
-    statusEl.textContent = `Done. ${data.notes.length} notes detected. ${data.uses_remaining} free uses left this month.`;
-    renderNotes(data.notes);
-    stage.style.display = "block";
-    document.getElementById("keyboard").style.display = "block";
-    controls.style.display = "flex";
-    seekRow.style.display = "flex";
+    onTranscribed(data);
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
   }
 }
 
-function renderNotes(notes) {
+const tiktokUrl = document.getElementById("tiktokUrl");
+const tiktokGo = document.getElementById("tiktokGo");
+tiktokGo.addEventListener("click", handleTikTokLink);
+tiktokUrl.addEventListener("keydown", (e) => { if (e.key === "Enter") handleTikTokLink(); });
+
+async function handleTikTokLink() {
+  const url = tiktokUrl.value.trim();
+  if (!url) return;
+  statusEl.textContent = "Fetching that TikTok video and transcribing... this can take longer than a file upload.";
+  resetStage();
+
+  // No local video preview for links — audio-only playback of what we transcribed.
+  videoPreview.style.display = "none";
+  activePlayer = player;
+  bindPlayerOnce(activePlayer);
+
+  try {
+    const res = await fetch(`${API_URL}/transcribe-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error (${res.status})`);
+    }
+    const data = await res.json();
+    if (data.audio_url) {
+      player.src = data.audio_url;
+    }
+    onTranscribed(data);
+  } catch (err) {
+    statusEl.textContent = `Something went wrong: ${err.message}`;
+  }
+}
+
+function resetStage() {
+  stage.style.display = "none";
+  controls.style.display = "none";
+  seekRow.style.display = "none";
+  document.getElementById("bgRow").style.display = "none";
+  document.getElementById("keyboard").style.display = "none";
+  transposeSemitones = 0;
+  transposeVal.textContent = "0";
+}
+
+function onTranscribed(data) {
+  rawNotes = data.notes;
+  statusEl.textContent = `Done. ${data.notes.length} notes detected. ${data.uses_remaining} free uses left this month.`;
+  renderNotes();
+  stage.style.display = "block";
+  document.getElementById("keyboard").style.display = "block";
+  controls.style.display = "flex";
+  document.getElementById("bgRow").style.display = "flex";
+  seekRow.style.display = "flex";
+}
+
+function transposedNotes() {
+  if (!transposeSemitones) return rawNotes;
+  return rawNotes.map(n => {
+    let p = n.pitch + transposeSemitones;
+    while (p < MIN_PITCH) p += 12;
+    while (p > MAX_PITCH) p -= 12;
+    return { ...n, pitch: p };
+  });
+}
+
+function renderNotes() {
+  const notes = transposedNotes();
   lanes.innerHTML = "";
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  defs.innerHTML = `
+    <linearGradient id="glassLeft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.75"/>
+      <stop offset="35%" stop-color="var(--hand-left)" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#8a5a26" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="glassRight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.75"/>
+      <stop offset="35%" stop-color="var(--hand-right)" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1f6f96" stop-opacity="0.85"/>
+    </linearGradient>
+  `;
+  lanes.appendChild(defs);
+
   const laneCount = MAX_PITCH - MIN_PITCH + 1;
-  const stageWidth = 700, stageHeight = 300;
+  const stageWidth = 700, stageHeight = 320;
   const pxPerSecond = 90;
   lanes.setAttribute("viewBox", `0 0 ${stageWidth} ${stageHeight}`);
   const laneWidth = stageWidth / laneCount;
 
   notes.forEach((n) => {
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const hand = handFor(n.pitch);
     const x = (n.pitch - MIN_PITCH) * laneWidth;
     const h = Math.max(4, n.duration * pxPerSecond);
-    rect.setAttribute("x", x + 1);
-    rect.setAttribute("width", Math.max(2, laneWidth - 2));
+    rect.setAttribute("x", x + 1.5);
+    rect.setAttribute("width", Math.max(2, laneWidth - 3));
     rect.setAttribute("height", h);
-    rect.setAttribute("rx", 2);
-    rect.setAttribute("fill", IS_BLACK[n.pitch % 12] ? "#c98a4a" : "#a97c50");
+    rect.setAttribute("rx", 6);
+    rect.setAttribute("fill", `url(#glass${hand === "right" ? "Right" : "Left"})`);
+    rect.setAttribute("stroke", "rgba(255,255,255,0.4)");
+    rect.setAttribute("stroke-width", "1");
     rect.setAttribute("data-y0", -(h + n.start_time * pxPerSecond));
     rect.setAttribute("data-pitch", n.pitch);
+    rect.setAttribute("data-hand", hand);
     rect.setAttribute("data-start", n.start_time);
     rect.setAttribute("data-end", n.start_time + n.duration);
     rect.setAttribute("y", rect.getAttribute("data-y0"));
@@ -392,8 +656,10 @@ function renderNotes(notes) {
 
   if (notes.length) {
     const firstFew = notes.slice(0, 8).map(n => pitchName(n.pitch)).join(", ");
-    statusEl.textContent += ` First notes detected: ${firstFew}${notes.length > 8 ? "..." : ""}`;
+    const base = `Done. ${rawNotes.length} notes detected.`;
+    statusEl.textContent = `${base} First notes: ${firstFew}${notes.length > 8 ? "..." : ""}`;
   }
+  positionNotesAt(activePlayer.currentTime || 0);
 }
 
 function renderKeyboard() {
@@ -435,6 +701,12 @@ playBtn.addEventListener("click", () => {
   }
 });
 
+function bindPlayerOnce(el) {
+  if (el.dataset.bound) return;
+  bindPlayerEvents(el);
+  el.dataset.bound = "true";
+}
+
 function bindPlayerEvents(el) {
   el.addEventListener("play", () => {
     playing = true;
@@ -464,11 +736,17 @@ function bindPlayerEvents(el) {
 
 function updateSeekFill() {
   const pct = seekbar.max > 0 ? (seekbar.value / seekbar.max) * 100 : 0;
-  seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
+  if (seekbar.classList.contains("dragging")) {
+    seekbar.style.background =
+      `linear-gradient(to right, #ff3b30 0%, #ff9500 16%, #ffcc00 32%, #34c759 48%, ` +
+      `#5cb8e4 64%, #5856d6 80%, #af52de 100%) 0 0 / ${Math.max(pct, 0.001)}% 100% no-repeat, var(--panel-2)`;
+  } else {
+    seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
+  }
 }
 
-seekbar.addEventListener("mousedown", () => { seeking = true; seekbar.classList.add("dragging"); });
-seekbar.addEventListener("touchstart", () => { seeking = true; seekbar.classList.add("dragging"); });
+seekbar.addEventListener("mousedown", () => { seeking = true; seekbar.classList.add("dragging"); updateSeekFill(); });
+seekbar.addEventListener("touchstart", () => { seeking = true; seekbar.classList.add("dragging"); updateSeekFill(); });
 seekbar.addEventListener("input", () => {
   seekTime.textContent = fmtTime(parseFloat(seekbar.value));
   updateSeekFill();
@@ -478,6 +756,7 @@ function commitSeek() {
   activePlayer.currentTime = parseFloat(seekbar.value);
   seeking = false;
   seekbar.classList.remove("dragging");
+  updateSeekFill();
 }
 seekbar.addEventListener("mouseup", commitSeek);
 seekbar.addEventListener("touchend", commitSeek);
@@ -487,21 +766,62 @@ speedSelect.addEventListener("change", () => {
   activePlayer.playbackRate = parseFloat(speedSelect.value);
 });
 
+// ---------- Transpose (visual only — shifts notes & keyboard, not audio pitch) ----------
+const transposeVal = document.getElementById("transposeVal");
+document.getElementById("transposeUp").addEventListener("click", () => setTranspose(transposeSemitones + 1));
+document.getElementById("transposeDown").addEventListener("click", () => setTranspose(transposeSemitones - 1));
+function setTranspose(v) {
+  transposeSemitones = Math.max(-12, Math.min(12, v));
+  transposeVal.textContent = (transposeSemitones > 0 ? "+" : "") + transposeSemitones;
+  if (rawNotes.length) renderNotes();
+}
+
+// ---------- Custom background image ----------
+const stageBg = document.getElementById("stageBg");
+const bgInput = document.getElementById("bgInput");
+const bgOpacity = document.getElementById("bgOpacity");
+const bgOpacityLabel = document.getElementById("bgOpacityLabel");
+const bgClear = document.getElementById("bgClear");
+let bgObjectUrl = null;
+
+bgInput.addEventListener("change", () => {
+  if (!bgInput.files.length) return;
+  if (bgObjectUrl) URL.revokeObjectURL(bgObjectUrl);
+  bgObjectUrl = URL.createObjectURL(bgInput.files[0]);
+  stageBg.style.backgroundImage = `url(${bgObjectUrl})`;
+  applyBgOpacity();
+  bgClear.style.display = "inline-block";
+});
+bgOpacity.addEventListener("input", applyBgOpacity);
+function applyBgOpacity() {
+  const pct = parseInt(bgOpacity.value, 10);
+  bgOpacityLabel.textContent = pct + "%";
+  if (stageBg.style.backgroundImage) stageBg.style.opacity = pct / 100;
+}
+bgClear.addEventListener("click", () => {
+  stageBg.style.backgroundImage = "";
+  stageBg.style.opacity = 0;
+  bgInput.value = "";
+  bgClear.style.display = "none";
+  if (bgObjectUrl) { URL.revokeObjectURL(bgObjectUrl); bgObjectUrl = null; }
+});
+
 function positionNotesAt(elapsed) {
-  const stageHeight = 300;
+  const stageHeight = 320;
   const pxPerSecond = 90;
   document.querySelectorAll("#lanes rect").forEach((rect) => {
     const y0 = parseFloat(rect.getAttribute("data-y0"));
     rect.setAttribute("y", y0 + elapsed * pxPerSecond + stageHeight);
   });
-  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit"));
+  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit-left", "lit-right"));
   document.querySelectorAll("#lanes rect").forEach((rect) => {
     const start = parseFloat(rect.getAttribute("data-start"));
     const end = parseFloat(rect.getAttribute("data-end"));
     if (elapsed >= start && elapsed <= end) {
       const pitch = rect.getAttribute("data-pitch");
+      const hand = rect.getAttribute("data-hand");
       const keyEl = document.querySelector(`[data-pitch="${pitch}"]`);
-      if (keyEl) keyEl.classList.add("lit");
+      if (keyEl) keyEl.classList.add(hand === "right" ? "lit-right" : "lit-left");
     }
   });
 }
@@ -510,10 +830,6 @@ function tick() {
   positionNotesAt(activePlayer.currentTime);
   if (playing) animFrame = requestAnimationFrame(tick);
 }
-
-document.getElementById("transposeBtn").addEventListener("click", () => {
-  alert("Transposing is a paid feature. Hook this up to your upgrade/checkout flow.");
-});
 </script>
 </body>
 </html>
