@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Key Rain Drops</title>
+<title>Falling Piano</title>
 <style>
   :root {
     --bg: #16161a;
@@ -59,11 +59,38 @@
     width: 100%;
     height: 320px;
     background: #0f0f13;
-    border-radius: 8px;
+    border-radius: 8px 8px 0 0;
     overflow: hidden;
     margin-top: 1rem;
     display: none;
   }
+  #keyboard {
+    position: relative;
+    width: 100%;
+    height: 90px;
+    background: #0f0f13;
+    border-radius: 0 0 8px 8px;
+    display: none;
+    border-top: 2px solid #000;
+  }
+  .white-key {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: #f4f4f4;
+    border: 1px solid #1a1a1e;
+    border-radius: 0 0 4px 4px;
+  }
+  .black-key {
+    position: absolute;
+    top: 0;
+    height: 60%;
+    background: #1a1a1e;
+    border-radius: 0 0 3px 3px;
+    z-index: 2;
+  }
+  .white-key.lit { background: #bcdcff; }
+  .black-key.lit { background: #4a8fe7; }
   #controls {
     display: flex;
     align-items: center;
@@ -77,8 +104,8 @@
 </head>
 <body>
 
-<h1>Key Rain Drops</h1>
-<p class="sub">Upload a piano recording. We'll transcribe it and show it as Raindrop notes.</p>
+<h1>Falling Piano</h1>
+<p class="sub">Upload a piano recording. We'll transcribe it and show it as falling notes.</p>
 
 <div class="panel">
   <div class="upload-zone" id="dropZone">
@@ -100,6 +127,7 @@
   </div>
 
   <div id="stage"><svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg></div>
+  <div id="keyboard"></div>
   <div id="status"></div>
 </div>
 
@@ -158,10 +186,17 @@ async function handleFile(file) {
   }
 }
 
+const MIN_PITCH = 21, MAX_PITCH = 108; // full 88-key piano range
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
+
+function pitchName(midi) {
+  return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+}
+
 function renderNotes(notes, durationSeconds) {
   lanes.innerHTML = "";
-  const minPitch = 21, maxPitch = 108; // full piano range
-  const laneCount = maxPitch - minPitch + 1;
+  const laneCount = MAX_PITCH - MIN_PITCH + 1;
   const stageWidth = 700, stageHeight = 320;
   const pxPerSecond = 90;
   lanes.setAttribute("viewBox", `0 0 ${stageWidth} ${stageHeight}`);
@@ -169,16 +204,68 @@ function renderNotes(notes, durationSeconds) {
   const laneWidth = stageWidth / laneCount;
   notes.forEach((n) => {
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    const x = (n.pitch - minPitch) * laneWidth;
+    const x = (n.pitch - MIN_PITCH) * laneWidth;
     const h = Math.max(4, n.duration * pxPerSecond);
     rect.setAttribute("x", x + 1);
     rect.setAttribute("width", Math.max(2, laneWidth - 2));
     rect.setAttribute("height", h);
     rect.setAttribute("rx", 2);
-    rect.setAttribute("fill", "#4a8fe7");
+    rect.setAttribute("fill", IS_BLACK[n.pitch % 12] ? "#e79a4a" : "#4a8fe7");
     rect.setAttribute("data-y0", -(h + n.start_time * pxPerSecond));
+    rect.setAttribute("data-pitch", n.pitch);
+    rect.setAttribute("data-start", n.start_time);
+    rect.setAttribute("data-end", n.start_time + n.duration);
     rect.setAttribute("y", rect.getAttribute("data-y0"));
     lanes.appendChild(rect);
+  });
+
+  renderKeyboard();
+
+  if (notes.length) {
+    const firstFew = notes.slice(0, 8).map(n => pitchName(n.pitch)).join(", ");
+    document.getElementById("status").textContent += ` First notes detected: ${firstFew}${notes.length > 8 ? "..." : ""}`;
+  }
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById("keyboard");
+  kb.innerHTML = "";
+  kb.style.display = "block";
+  const whiteKeys = [];
+  for (let p = MIN_PITCH; p <= MAX_PITCH; p++) if (!IS_BLACK[p % 12]) whiteKeys.push(p);
+  const whiteWidth = 100 / whiteKeys.length;
+
+  whiteKeys.forEach((p, i) => {
+    const key = document.createElement("div");
+    key.className = "white-key";
+    key.dataset.pitch = p;
+    key.style.left = (i * whiteWidth) + "%";
+    key.style.width = whiteWidth + "%";
+    kb.appendChild(key);
+  });
+
+  for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
+    if (!IS_BLACK[p % 12]) continue;
+    const whiteIndexBefore = whiteKeys.filter(w => w < p).length - 1;
+    const key = document.createElement("div");
+    key.className = "black-key";
+    key.dataset.pitch = p;
+    key.style.left = ((whiteIndexBefore + 1) * whiteWidth - whiteWidth * 0.3) + "%";
+    key.style.width = (whiteWidth * 0.6) + "%";
+    kb.appendChild(key);
+  }
+}
+
+function updateKeyboardLighting(elapsedSeconds) {
+  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit"));
+  document.querySelectorAll("#lanes rect").forEach((rect) => {
+    const start = parseFloat(rect.getAttribute("data-start"));
+    const end = parseFloat(rect.getAttribute("data-end"));
+    if (elapsedSeconds >= start && elapsedSeconds <= end) {
+      const pitch = rect.getAttribute("data-pitch");
+      const keyEl = document.querySelector(`[data-pitch="${pitch}"]`);
+      if (keyEl) keyEl.classList.add("lit");
+    }
   });
 }
 
@@ -202,6 +289,7 @@ function tick() {
     const y0 = parseFloat(rect.getAttribute("data-y0"));
     rect.setAttribute("y", y0 + elapsed * pxPerSecond + stageHeight);
   });
+  updateKeyboardLighting(elapsed);
   if (playing) animFrame = requestAnimationFrame(tick);
 }
 
