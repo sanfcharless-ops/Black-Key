@@ -304,6 +304,32 @@
     padding: 1.75rem;
   }
 
+  #newTranscriptionBtn {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.65rem 1rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  #newTranscriptionBtn:hover { border-color: var(--accent-dim); background: rgba(255,255,255,0.04); }
+  #newTranscriptionBtn.visible { display: inline-flex; }
+
+  #resultsRoom {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  #resultsRoom.visible { opacity: 1; transform: translateY(0); }
+
   /* ---------- Source tabs (file vs TikTok/YouTube link) ---------- */
   #sourceTabs {
     display: flex;
@@ -817,6 +843,7 @@
     </div>
 
     <div class="card">
+      <button id="newTranscriptionBtn">← New transcription</button>
       <div id="sourceTabs">
         <div class="source-tab active" id="tabFile">Upload file</div>
         <div class="source-tab" id="tabLink">Video link</div>
@@ -860,6 +887,7 @@
         </div>
       </div>
 
+      <div id="resultsRoom">
       <video id="videoPreview" playsinline></video>
 
       <div id="controls">
@@ -928,6 +956,7 @@
       </div>
 
       <div id="status"></div>
+      </div>
       <audio id="player" style="display:none"></audio>
     </div>
   </div>
@@ -1365,6 +1394,29 @@ function resetStage() {
   playBtn.disabled = false;
 }
 
+// ---------- Results room: a distinct screen from the upload UI, not just
+// inline results in the same card ----------
+const resultsRoom = document.getElementById("resultsRoom");
+const newTranscriptionBtn = document.getElementById("newTranscriptionBtn");
+function enterResultsRoom() {
+  document.getElementById("sourceTabs").style.display = "none";
+  filePane.style.display = "none";
+  linkPane.style.display = "none";
+  recordPane.style.display = "none";
+  newTranscriptionBtn.classList.add("visible");
+  resultsRoom.classList.add("visible");
+}
+function exitResultsRoom() {
+  resultsRoom.classList.remove("visible");
+  newTranscriptionBtn.classList.remove("visible");
+  document.getElementById("sourceTabs").style.display = "flex";
+  selectSourceTab(tabFile);
+}
+newTranscriptionBtn.addEventListener("click", () => {
+  resetStage();
+  exitResultsRoom();
+});
+
 let tempoBpm = 120;
 
 function onTranscribed(data) {
@@ -1384,6 +1436,7 @@ function onTranscribed(data) {
   document.getElementById("viewModeGroup").style.display = "flex";
   applyViewMode();
   maybeShowRotatePrompt();
+  enterResultsRoom();
 }
 
 // ---------- Mobile landscape-rotation prompt ----------
@@ -1895,6 +1948,7 @@ function loadSavedProject(p) {
   statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes — this is the transcription only, the original audio wasn't saved, so playback and the seekbar aren't available here.`;
   playBtn.disabled = true;
   seekRow.style.display = "none";
+  enterResultsRoom();
 }
 
 // ---------- View mode: falling notes / sheet music / both ----------
