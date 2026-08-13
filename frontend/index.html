@@ -213,6 +213,52 @@
   }
   .menu-item:hover { background: var(--panel-2); }
 
+  /* ---------- My Projects modal ---------- */
+  #projectsModalOverlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center; justify-content: center;
+    padding: 1.5rem;
+  }
+  #projectsModalOverlay.open { display: flex; }
+  #projectsModal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #projectsModalHeader { display: flex; align-items: center; justify-content: space-between; }
+  #projectsModalHeader h3 { margin: 0; font-size: 1.05rem; color: var(--text); }
+  #projectsModalClose { background: transparent; border: none; color: var(--muted); font-size: 1.4rem; cursor: pointer; line-height: 1; }
+  #projectsModalClose:hover { color: var(--text); }
+  #projectsModalHint { color: var(--muted); font-size: 0.78rem; margin: 0.4rem 0 1rem; }
+  #projectsList { overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+  #projectsList .empty-hint { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 2rem 0; }
+  .project-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+  }
+  .project-item-info { min-width: 0; }
+  .project-item-name { color: var(--text); font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .project-item-meta { color: var(--muted); font-size: 0.74rem; margin-top: 0.15rem; }
+  .project-item-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .project-item-actions button {
+    background: transparent; border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); font-size: 0.76rem; padding: 0.35rem 0.6rem; cursor: pointer;
+  }
+  .project-item-actions button:hover { border-color: var(--accent-dim); }
+  .project-item-actions .delete-btn:hover { border-color: #e74c3c; color: #e74c3c; }
+
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -717,6 +763,7 @@
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4" r="1.6" fill="currentColor"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/><circle cx="9" cy="14" r="1.6" fill="currentColor"/></svg>
         </button>
         <div class="menu-dropdown" id="menuDropdown">
+          <button class="menu-item" id="menuProjectsItem">My Projects</button>
           <button class="menu-item" id="menuProItem">
             <span>Upgrade to Pro</span>
             <span class="pro-badge">Pro</span>
@@ -793,6 +840,7 @@
           <button class="control" id="loopClear" title="Clear practice loop">Clear</button>
         </div>
         <button class="control" id="downloadMidiBtn" title="Download the detected notes as a MIDI file">Download MIDI</button>
+        <button class="control primary" id="saveProjectBtn" title="Save this transcription to revisit later">Save Project</button>
       </div>
 
       <div id="bgRow">
@@ -843,6 +891,17 @@
 </div>
 
 <footer id="pageFooter">currently being build by santi figueredo charles</footer>
+
+<div id="projectsModalOverlay">
+  <div id="projectsModal">
+    <div id="projectsModalHeader">
+      <h3>My Projects</h3>
+      <button id="projectsModalClose" title="Close">&times;</button>
+    </div>
+    <p id="projectsModalHint">Saved on this device only — not synced to an account yet.</p>
+    <div id="projectsList"></div>
+  </div>
+</div>
 
 <script>
 // Point this at your deployed backend.
@@ -1220,6 +1279,8 @@ function resetStage() {
   transposeSemitones = 0;
   transposeVal.textContent = "0";
   clearLoop();
+  loadedProjectMode = false;
+  playBtn.disabled = false;
 }
 
 let tempoBpm = 120;
@@ -1631,6 +1692,128 @@ document.getElementById("downloadMidiBtn").addEventListener("click", () => {
   a.remove();
   URL.revokeObjectURL(url);
 });
+
+// ---------- My Projects (device-local, via localStorage — no accounts/
+// backend database exist yet, so this doesn't sync across devices) ----------
+const PROJECTS_KEY = "keydrops_projects";
+const MAX_SAVED_PROJECTS = 20;
+let loadedProjectMode = false; // true when viewing a saved project with no live audio to play back
+
+function loadProjectsList() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveProjectsList(list) {
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    alert("Couldn't save — your browser's local storage is full or unavailable. Try deleting an older project first.");
+    return false;
+  }
+}
+
+document.getElementById("saveProjectBtn").addEventListener("click", () => {
+  if (!rawNotes.length) return;
+  const defaultName = `Recording — ${new Date().toLocaleDateString()}`;
+  const name = prompt("Name this project:", defaultName);
+  if (name === null) return; // cancelled
+  const projects = loadProjectsList();
+  projects.unshift({
+    id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`),
+    name: name.trim() || defaultName,
+    savedAt: Date.now(),
+    notes: rawNotes,
+    tempoBpm: tempoBpm,
+    noteCount: rawNotes.length,
+  });
+  const trimmed = projects.slice(0, MAX_SAVED_PROJECTS);
+  if (saveProjectsList(trimmed)) {
+    statusEl.textContent = `Saved "${name.trim() || defaultName}" to My Projects.`;
+  }
+});
+
+const projectsModalOverlay = document.getElementById("projectsModalOverlay");
+document.getElementById("menuProjectsItem").addEventListener("click", () => {
+  setMenuOpen(false);
+  renderProjectsList();
+  projectsModalOverlay.classList.add("open");
+});
+document.getElementById("projectsModalClose").addEventListener("click", () => {
+  projectsModalOverlay.classList.remove("open");
+});
+projectsModalOverlay.addEventListener("click", (e) => {
+  if (e.target === projectsModalOverlay) projectsModalOverlay.classList.remove("open");
+});
+
+function fmtSavedDate(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function renderProjectsList() {
+  const container = document.getElementById("projectsList");
+  const projects = loadProjectsList();
+  container.innerHTML = "";
+  if (!projects.length) {
+    container.innerHTML = `<div class="empty-hint">No saved projects yet. Transcribe something, then hit "Save Project."</div>`;
+    return;
+  }
+  projects.forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "project-item";
+    row.innerHTML = `
+      <div class="project-item-info">
+        <div class="project-item-name">${escapeHtml(p.name)}</div>
+        <div class="project-item-meta">${fmtSavedDate(p.savedAt)} · ${p.noteCount} notes</div>
+      </div>
+      <div class="project-item-actions">
+        <button class="load-btn">Load</button>
+        <button class="delete-btn">Delete</button>
+      </div>
+    `;
+    row.querySelector(".load-btn").addEventListener("click", () => loadSavedProject(p));
+    row.querySelector(".delete-btn").addEventListener("click", () => {
+      if (!confirm(`Delete "${p.name}"?`)) return;
+      saveProjectsList(loadProjectsList().filter((x) => x.id !== p.id));
+      renderProjectsList();
+    });
+    container.appendChild(row);
+  });
+}
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function loadSavedProject(p) {
+  projectsModalOverlay.classList.remove("open");
+  landing.classList.add("hidden");
+  revealWhy.style.display = "none";
+  revealBeta.style.display = "none";
+  app.classList.add("visible");
+  window.scrollTo(0, 0);
+
+  loadedProjectMode = true;
+  rawNotes = p.notes;
+  tempoBpm = p.tempoBpm || 120;
+  resetStage();
+  renderNotes();
+  renderSheetMusic();
+  stage.style.display = "block";
+  document.getElementById("keyboard").style.display = "block";
+  controls.style.display = "flex";
+  document.getElementById("viewModeGroup").style.display = "flex";
+  document.querySelector('.view-mode-btn[data-mode="sheet"]').click();
+  statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes — this is the transcription only, the original audio wasn't saved, so playback and the seekbar aren't available here.`;
+  playBtn.disabled = true;
+  seekRow.style.display = "none";
+}
 
 // ---------- View mode: falling notes / sheet music / both ----------
 let viewMode = "falling";
