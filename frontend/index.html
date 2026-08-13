@@ -109,7 +109,7 @@
     padding: 1.75rem;
   }
 
-  /* ---------- Source tabs (file vs TikTok link) ---------- */
+  /* ---------- Source tabs (file vs TikTok/YouTube link) ---------- */
   #sourceTabs {
     display: flex;
     gap: 0.4rem;
@@ -370,19 +370,19 @@
 
 <div id="landing">
   <h1>Black Key</h1>
-  <p>Upload a piano recording — or paste a TikTok link — and watch it fall into place, note by note, played back exactly as you recorded it.</p>
+  <p>Upload a piano recording — or paste a TikTok or YouTube link — and watch it fall into place, note by note, played back exactly as you recorded it.</p>
   <button class="cta" id="getStarted">Get started</button>
 </div>
 
 <div id="app">
   <div class="container">
     <p class="app-title">Black Key</p>
-    <p class="app-sub">Upload a piano recording, or paste a TikTok link, to transcribe it</p>
+    <p class="app-sub">Upload a piano recording, or paste a TikTok or YouTube link, to transcribe it</p>
 
     <div class="card">
       <div id="sourceTabs">
         <div class="source-tab active" id="tabFile">Upload file</div>
-        <div class="source-tab" id="tabLink">TikTok link</div>
+        <div class="source-tab" id="tabLink">Video link</div>
       </div>
 
       <div id="filePane">
@@ -395,10 +395,10 @@
 
       <div id="linkPane">
         <div class="link-row">
-          <input type="text" id="tiktokUrl" placeholder="https://www.tiktok.com/@user/video/..." />
+          <input type="text" id="tiktokUrl" placeholder="TikTok or YouTube link..." />
           <button class="control primary" id="tiktokGo">Transcribe</button>
         </div>
-        <div class="hint">Paste a link to a TikTok piano video. We'll pull the audio and transcribe it the same way.</div>
+        <div class="hint">Paste a link to a TikTok or YouTube piano video. We'll pull the audio and transcribe it the same way.</div>
       </div>
 
       <video id="videoPreview" playsinline></video>
@@ -580,7 +580,7 @@ tiktokUrl.addEventListener("keydown", (e) => { if (e.key === "Enter") handleTikT
 async function handleTikTokLink() {
   const url = tiktokUrl.value.trim();
   if (!url) return;
-  statusEl.textContent = "Fetching that TikTok video and transcribing... this can take longer than a file upload.";
+  statusEl.textContent = "Fetching that video and transcribing... this can take longer than a file upload.";
   resetStage();
 
   // No local video preview for links — audio-only playback of what we transcribed.

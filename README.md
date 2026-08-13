@@ -2,8 +2,8 @@
 
 Two pieces:
 
-- **backend/** — a Python API that takes an uploaded audio/video file (or a TikTok link) and returns the detected piano notes, using Basic Pitch (open-source, MIT-licensed, free to run).
-- **frontend/** — a single HTML page that uploads a file (or a TikTok link), calls the backend, and renders the falling-notes player.
+- **backend/** — a Python API that takes an uploaded audio/video file (or a TikTok/YouTube link) and returns the detected piano notes, using Basic Pitch (open-source, MIT-licensed, free to run).
+- **frontend/** — a single HTML page that uploads a file (or a TikTok/YouTube link), calls the backend, and renders the falling-notes player.
 
 ## Getting it live (no coding required, just following steps)
 
@@ -29,7 +29,7 @@ Upload a short piano recording (30 seconds to a couple minutes is a good first t
 ## What's not built yet
 - The free-use limit is turned off entirely right now (`USAGE_LIMIT_ENABLED = False` in `backend/main.py`) since it's just solo testing. It's also still tracked in memory, which resets if the server restarts. Before real users show up: turn the limit back on, and swap the in-memory counter for a small database.
 - Transpose is visual-only — it shifts the falling notes and keyboard by semitone, but doesn't pitch-shift the audio you actually hear. Real-time audio pitch-shifting is a bigger build (Web Audio API) for later.
-- TikTok link fetching (`/transcribe-url`) uses yt-dlp, which scrapes TikTok directly — no official API. It can get blocked by TikTok's anti-bot measures depending on the server's network, and will need occasional `yt-dlp` version bumps as TikTok changes its site. Treat it as best-effort, not guaranteed.
+- TikTok/YouTube link fetching (`/transcribe-url`) uses yt-dlp, which scrapes each site directly — no official API. TikTok can get blocked by anti-bot measures depending on the server's network; YouTube needs a JS runtime (deno, installed via the Dockerfile) to decode video URLs. Both will need occasional `yt-dlp` version bumps as the sites change. Treat it as best-effort, not guaranteed.
 - No payment processing yet (Stripe is the natural choice when we get there).
 - No login/signup flow yet — needed once someone hits their free limit and wants to pay.
 

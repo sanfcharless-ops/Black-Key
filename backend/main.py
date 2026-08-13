@@ -1,8 +1,8 @@
 """
 Piano transcription backend.
 
-Accepts an uploaded audio or video file, or a TikTok link. Video files
-(and TikTok downloads) have their audio track extracted first (via
+Accepts an uploaded audio or video file, or a TikTok/YouTube link. Video
+files (and link downloads) have their audio track extracted first (via
 ffmpeg / yt-dlp), then either way the audio is run through Basic Pitch
 (open-source audio-to-MIDI model), returning the detected notes as JSON
 so the frontend can render them as falling notes.
@@ -10,15 +10,23 @@ so the frontend can render them as falling notes.
 Deploy notes:
 - Requires Python 3.10 or 3.11 (Basic Pitch's pinned numpy range does not
   build cleanly on 3.12 yet).
-- Requires ffmpeg on the server for video uploads and TikTok downloads.
+- Requires ffmpeg on the server for video uploads and link downloads.
   Deployed via the Dockerfile in this folder (python:3.11-slim + apt-get
   install ffmpeg), rather than relying on a buildpack to infer it —
   Nixpacks' auto-detected start command and multi-stage build silently
   dropped ffmpeg from the final runtime image despite aptPkgs listing
   it, so plain Nixpacks config wasn't reliable here.
-- TikTok fetching uses yt-dlp, which scrapes TikTok's site directly (no
-  official API). TikTok changes its site often enough that this can
-  break and need a `pip install -U yt-dlp` bump; treat it as best-effort.
+- TikTok/YouTube fetching uses yt-dlp, which scrapes each site directly
+  (no official API for TikTok; YouTube's extractor is more mature/
+  reliable but still unofficial). Sites change often enough that this
+  can break and need a `pip install -U yt-dlp` bump; treat it as
+  best-effort, and TikTok specifically can get blocked by anti-bot
+  measures depending on the server's network — see the note in
+  transcribe_url().
+- YouTube extraction also requires a JS runtime (yt-dlp uses it to
+  decode video URLs) — the Dockerfile installs deno for this. Without
+  it, YouTube links fail with "This video is not available" even
+  though the link is fine.
 - Install deps with: pip install -r requirements.txt
 - Run locally with: uvicorn main:app --reload
 """
@@ -50,8 +58,9 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
 ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 MAX_FILE_SIZE_MB = 60  # raised from 25MB since video files run bigger
 
-# Extracted audio for TikTok links is kept around briefly so the frontend
-# can fetch it back for playback (see /audio/{filename}), then swept up.
+# Extracted audio for TikTok/YouTube links is kept around briefly so the
+# frontend can fetch it back for playback (see /audio/{filename}), then
+# swept up.
 AUDIO_ID_RE = re.compile(r"^[0-9a-f-]{36}\.wav$")
 AUDIO_RETENTION_SECONDS = 600
 
@@ -147,11 +156,19 @@ async def transcribe(file: UploadFile = File(...), user_id: str | None = None):
     )
 
 
+SUPPORTED_LINK_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be"]
+# TikTok has been observed blocking requests from cloud/datacenter IPs
+# (including Railway's) with "Your IP address is blocked" — that's
+# TikTok's own anti-bot system, not fixable from our side short of
+# routing through a residential proxy. YouTube's extractor is generally
+# more reliable against that kind of blocking.
+
+
 @app.post("/transcribe-url", response_model=TranscriptionResult)
 async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_id: str | None = None):
     url = payload.url.strip()
-    if "tiktok.com" not in url:
-        raise HTTPException(400, "Only TikTok links are supported right now.")
+    if not any(domain in url for domain in SUPPORTED_LINK_DOMAINS):
+        raise HTTPException(400, "Only TikTok and YouTube links are supported right now.")
 
     uid = get_user_id(user_id)
     check_and_consume_usage(uid)
@@ -174,10 +191,10 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
             timeout=120,
         )
     except subprocess.TimeoutExpired:
-        raise HTTPException(504, "Timed out fetching that TikTok video.")
+        raise HTTPException(504, "Timed out fetching that video.")
 
     if result.returncode != 0 or not os.path.exists(audio_path):
-        raise HTTPException(400, f"Couldn't fetch that TikTok video: {result.stderr[-500:]}")
+        raise HTTPException(400, f"Couldn't fetch that video: {result.stderr[-500:]}")
 
     try:
         notes, duration = run_transcription(audio_path)
@@ -199,8 +216,8 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
 
 @app.get("/audio/{filename}")
 def get_audio(filename: str):
-    """Serves audio extracted from a TikTok link back to the frontend for
-    playback. Only exists briefly — see AUDIO_RETENTION_SECONDS."""
+    """Serves audio extracted from a TikTok/YouTube link back to the
+    frontend for playback. Only exists briefly — see AUDIO_RETENTION_SECONDS."""
     if not AUDIO_ID_RE.match(filename):
         raise HTTPException(400, "Invalid filename")
     path = os.path.join(tempfile.gettempdir(), filename)
