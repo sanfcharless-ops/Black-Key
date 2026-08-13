@@ -9,10 +9,13 @@ so the frontend can render them as falling notes.
 
 Deploy notes:
 - Requires Python 3.10 or 3.11 (Basic Pitch's pinned numpy range does not
-  build cleanly on 3.12 yet). On Railway/Render, set this via a
-  runtime.txt file containing: python-3.11.9
+  build cleanly on 3.12 yet).
 - Requires ffmpeg on the server for video uploads and TikTok downloads.
-  nixpacks.toml in this folder tells Railway to install it automatically.
+  Deployed via the Dockerfile in this folder (python:3.11-slim + apt-get
+  install ffmpeg), rather than relying on a buildpack to infer it —
+  Nixpacks' auto-detected start command and multi-stage build silently
+  dropped ffmpeg from the final runtime image despite aptPkgs listing
+  it, so plain Nixpacks config wasn't reliable here.
 - TikTok fetching uses yt-dlp, which scrapes TikTok's site directly (no
   official API). TikTok changes its site often enough that this can
   break and need a `pip install -U yt-dlp` bump; treat it as best-effort.
@@ -215,7 +218,7 @@ async def _delete_after_delay(path: str, delay_seconds: int = AUDIO_RETENTION_SE
 def extract_audio_from_video(video_path: str, output_wav_path: str):
     """
     Pulls the audio track out of a video file using ffmpeg. Requires
-    ffmpeg to be installed on the server (see nixpacks.toml).
+    ffmpeg to be installed on the server (see Dockerfile).
     """
     result = subprocess.run(
         [
