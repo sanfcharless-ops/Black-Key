@@ -367,6 +367,33 @@
     color: var(--muted);
   }
   .beta-callout strong { color: var(--text); font-weight: 600; }
+
+  #rotatePrompt {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    background: rgba(169,124,80,0.1);
+    border: 1px solid rgba(169,124,80,0.3);
+    border-radius: 10px;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+  #rotatePrompt svg { color: var(--accent); flex-shrink: 0; animation: rotateHint 2.4s ease-in-out infinite; }
+  #rotatePrompt span { flex: 1; }
+  #rotateDismiss {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
+  }
+  #rotateDismiss:hover { color: var(--text); }
+  @keyframes rotateHint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-90deg); }
+  }
+  @media (min-width: 769px) { #rotatePrompt { display: none !important; } }
+
   .record-btn {
     width: 64px; height: 64px;
     border-radius: 50%;
@@ -594,7 +621,7 @@
   #keyboard {
     position: relative;
     width: 100%;
-    height: 92px;
+    height: 150px;
     background: linear-gradient(180deg, #0c0a0f, #050408);
     border-radius: 0 0 12px 12px;
     display: none;
@@ -782,6 +809,12 @@
           <div class="loop-region" id="loopRegion"></div>
         </div>
         <span id="seekDuration">0:00</span>
+      </div>
+
+      <div id="rotatePrompt">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M12 18h.01"></path></svg>
+        <span>Rotate your phone sideways for a bigger view of the keyboard and notes.</span>
+        <button id="rotateDismiss" title="Dismiss">&times;</button>
       </div>
 
       <div id="viewModeGroup">
@@ -1182,6 +1215,7 @@ function resetStage() {
   document.getElementById("keyboard").style.display = "none";
   document.getElementById("viewModeGroup").style.display = "none";
   document.getElementById("sheetMusicWrap").style.display = "none";
+  document.getElementById("rotatePrompt").style.display = "none";
   transposeSemitones = 0;
   transposeVal.textContent = "0";
   clearLoop();
@@ -1205,7 +1239,33 @@ function onTranscribed(data) {
   seekRow.style.display = "flex";
   document.getElementById("viewModeGroup").style.display = "flex";
   applyViewMode();
+  maybeShowRotatePrompt();
 }
+
+// ---------- Mobile landscape-rotation prompt ----------
+const rotatePrompt = document.getElementById("rotatePrompt");
+let rotatePromptDismissed = false;
+let hasResults = false;
+
+function isMobilePortrait() {
+  return window.matchMedia("(max-width: 768px) and (orientation: portrait)").matches;
+}
+function maybeShowRotatePrompt() {
+  hasResults = true;
+  rotatePrompt.style.display = (!rotatePromptDismissed && isMobilePortrait()) ? "flex" : "none";
+}
+document.getElementById("rotateDismiss").addEventListener("click", () => {
+  rotatePromptDismissed = true;
+  rotatePrompt.style.display = "none";
+});
+window.addEventListener("resize", () => {
+  if (!hasResults || rotatePromptDismissed) return;
+  rotatePrompt.style.display = isMobilePortrait() ? "flex" : "none";
+});
+window.addEventListener("orientationchange", () => {
+  if (!hasResults || rotatePromptDismissed) return;
+  setTimeout(() => { rotatePrompt.style.display = isMobilePortrait() ? "flex" : "none"; }, 200);
+});
 
 function transposedNotes() {
   if (!transposeSemitones) return rawNotes;
@@ -1256,9 +1316,9 @@ function renderNotes() {
     group.setAttribute("transform", `translate(0, ${y0})`);
 
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("x", x + 1.5);
+    rect.setAttribute("x", x + 0.5);
     rect.setAttribute("y", 0);
-    rect.setAttribute("width", Math.max(2, laneWidth - 3));
+    rect.setAttribute("width", Math.max(3, laneWidth - 1));
     rect.setAttribute("height", h);
     rect.setAttribute("rx", 6);
     rect.setAttribute("fill", `url(#glass${hand === "right" ? "Right" : "Left"})`);
