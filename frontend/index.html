@@ -105,6 +105,52 @@
   }
   .app-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 2rem; }
 
+  .app-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .menu-wrap { position: relative; flex-shrink: 0; }
+  .menu-btn {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .menu-btn:hover, .menu-btn.open { border-color: var(--accent-dim); color: var(--text); }
+  .menu-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 210px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.4rem;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.6);
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 10;
+  }
+  .menu-dropdown.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  .menu-item {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  .menu-item:hover { background: var(--panel-2); }
+
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -450,8 +496,24 @@
 
 <div id="app">
   <div class="container">
-    <p class="app-title">keydrops</p>
-    <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, or record live to transcribe it</p>
+    <div class="app-header">
+      <div>
+        <p class="app-title">keydrops</p>
+        <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, or record live to transcribe it</p>
+      </div>
+      <div class="menu-wrap">
+        <button class="menu-btn" id="menuBtn" title="Menu" aria-haspopup="true" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="4" r="1.6" fill="currentColor"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/><circle cx="9" cy="14" r="1.6" fill="currentColor"/></svg>
+        </button>
+        <div class="menu-dropdown" id="menuDropdown">
+          <button class="menu-item" id="menuProItem">
+            <span>Upgrade to Pro</span>
+            <span class="pro-badge">Pro</span>
+          </button>
+          <button class="menu-item" id="menuAboutItem">About keydrops</button>
+        </div>
+      </div>
+    </div>
 
     <div class="card">
       <div id="sourceTabs">
@@ -557,6 +619,30 @@ const app = document.getElementById("app");
 document.getElementById("getStarted").addEventListener("click", () => {
   landing.classList.add("hidden");
   app.classList.add("visible");
+});
+
+// ---------- Top-right menu ----------
+const menuBtn = document.getElementById("menuBtn");
+const menuDropdown = document.getElementById("menuDropdown");
+function setMenuOpen(open) {
+  menuBtn.classList.toggle("open", open);
+  menuBtn.setAttribute("aria-expanded", open);
+  menuDropdown.classList.toggle("open", open);
+}
+menuBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  setMenuOpen(!menuDropdown.classList.contains("open"));
+});
+document.addEventListener("click", (e) => {
+  if (!menuDropdown.contains(e.target)) setMenuOpen(false);
+});
+document.getElementById("menuProItem").addEventListener("click", () => {
+  setMenuOpen(false);
+  alert("Pro is coming soon — it'll unlock things like 60-second recordings. Not wired up to real payment yet.");
+});
+document.getElementById("menuAboutItem").addEventListener("click", () => {
+  setMenuOpen(false);
+  alert("keydrops turns a recording, a TikTok/YouTube link, or live playing into falling notes on an 88-key keyboard.");
 });
 
 const fileInput = document.getElementById("fileInput");
