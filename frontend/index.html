@@ -162,6 +162,44 @@
   #tiktokUrl:focus { border-color: var(--accent-dim); }
   #linkPane .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.6rem; }
 
+  #recordPane { display: none; }
+  .record-zone {
+    border: 1px dashed rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 2.5rem 1rem;
+    text-align: center;
+  }
+  .record-btn {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 2px solid var(--border);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .record-btn:hover { border-color: var(--accent-dim); }
+  .record-dot {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #e74c3c;
+    transition: border-radius 0.15s ease, transform 0.15s ease;
+  }
+  .record-btn.recording {
+    border-color: #e74c3c;
+    animation: recordPulse 1.4s ease-in-out infinite;
+  }
+  .record-btn.recording .record-dot {
+    border-radius: 5px;
+    transform: scale(0.75);
+  }
+  @keyframes recordPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(231,76,60,0.35); }
+    50% { box-shadow: 0 0 0 10px rgba(231,76,60,0); }
+  }
+  .record-time { margin-top: 1rem; font-size: 0.9rem; color: var(--text); font-variant-numeric: tabular-nums; }
+  #recordPane .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.5rem; }
+
   #seekRow {
     display: none;
     align-items: center;
@@ -380,12 +418,13 @@
 <div id="app">
   <div class="container">
     <p class="app-title">keydrops</p>
-    <p class="app-sub">Upload a piano recording, or paste a TikTok or YouTube link, to transcribe it</p>
+    <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, or record live to transcribe it</p>
 
     <div class="card">
       <div id="sourceTabs">
         <div class="source-tab active" id="tabFile">Upload file</div>
         <div class="source-tab" id="tabLink">Video link</div>
+        <div class="source-tab" id="tabRecord">Record</div>
       </div>
 
       <div id="filePane">
@@ -402,6 +441,16 @@
           <button class="control primary" id="tiktokGo">Transcribe</button>
         </div>
         <div class="hint">Paste a link to a TikTok or YouTube piano video. We'll pull the audio and transcribe it the same way.</div>
+      </div>
+
+      <div id="recordPane">
+        <div class="record-zone">
+          <button class="record-btn" id="recordBtn" title="Start recording">
+            <span class="record-dot"></span>
+          </button>
+          <div class="record-time" id="recordTime">0:00 / 0:30</div>
+          <div class="hint" id="recordHint">Record up to 30 seconds of live piano playing.</div>
+        </div>
       </div>
 
       <video id="videoPreview" playsinline></video>
@@ -497,16 +546,26 @@ fileInput.addEventListener("change", () => {
 // ---------- Source tabs ----------
 const tabFile = document.getElementById("tabFile");
 const tabLink = document.getElementById("tabLink");
+const tabRecord = document.getElementById("tabRecord");
 const filePane = document.getElementById("filePane");
 const linkPane = document.getElementById("linkPane");
-tabFile.addEventListener("click", () => {
-  tabFile.classList.add("active"); tabLink.classList.remove("active");
-  filePane.style.display = "block"; linkPane.style.display = "none";
-});
-tabLink.addEventListener("click", () => {
-  tabLink.classList.add("active"); tabFile.classList.remove("active");
-  linkPane.style.display = "block"; filePane.style.display = "none";
-});
+const recordPane = document.getElementById("recordPane");
+const TABS = [
+  { tab: tabFile, pane: filePane },
+  { tab: tabLink, pane: linkPane },
+  { tab: tabRecord, pane: recordPane },
+];
+function selectSourceTab(active) {
+  TABS.forEach(({ tab, pane }) => {
+    const isActive = tab === active;
+    tab.classList.toggle("active", isActive);
+    pane.style.display = isActive ? "block" : "none";
+  });
+  if (active !== tabRecord) cancelRecording();
+}
+tabFile.addEventListener("click", () => selectSourceTab(tabFile));
+tabLink.addEventListener("click", () => selectSourceTab(tabLink));
+tabRecord.addEventListener("click", () => selectSourceTab(tabRecord));
 
 const MIN_PITCH = 21, MAX_PITCH = 108;
 const MIDDLE_C = 60; // heuristic split point for left/right hand coloring
@@ -605,6 +664,138 @@ async function handleTikTokLink() {
     if (data.audio_url) {
       player.src = data.audio_url;
     }
+    onTranscribed(data);
+  } catch (err) {
+    statusEl.textContent = `Something went wrong: ${err.message}`;
+  }
+}
+
+// ---------- Live mic recording (up to 30 seconds) ----------
+const RECORD_LIMIT_SECONDS = 30;
+const recordBtn = document.getElementById("recordBtn");
+const recordTimeEl = document.getElementById("recordTime");
+const recordHintEl = document.getElementById("recordHint");
+const RECORD_DEFAULT_HINT = recordHintEl.textContent;
+
+let mediaRecorder = null;
+let mediaStream = null;
+let recordedChunks = [];
+let recordStartTime = 0;
+let recordTimerInterval = null;
+let recordAutoStopTimeout = null;
+let submitOnStop = true;
+
+function pickRecorderMimeType() {
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  for (const type of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return "";
+}
+
+recordBtn.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopRecording(true);
+  } else {
+    startRecording();
+  }
+});
+
+async function startRecording() {
+  if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    recordHintEl.textContent = "This browser doesn't support microphone recording.";
+    return;
+  }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    recordHintEl.textContent = "Microphone access was denied — allow it in your browser settings to record.";
+    return;
+  }
+
+  const mimeType = pickRecorderMimeType();
+  mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+  recordedChunks = [];
+
+  mediaRecorder.addEventListener("dataavailable", (e) => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  });
+  mediaRecorder.addEventListener("stop", onRecordingStopped);
+
+  mediaRecorder.start();
+  recordStartTime = Date.now();
+  recordBtn.classList.add("recording");
+  recordBtn.title = "Stop recording";
+  recordHintEl.textContent = "Recording... click again to stop early.";
+  recordTimerInterval = setInterval(updateRecordTimer, 200);
+  recordAutoStopTimeout = setTimeout(() => stopRecording(true), RECORD_LIMIT_SECONDS * 1000);
+}
+
+function updateRecordTimer() {
+  const elapsed = Math.min(RECORD_LIMIT_SECONDS, (Date.now() - recordStartTime) / 1000);
+  recordTimeEl.textContent = `${fmtTime(elapsed)} / 0:${RECORD_LIMIT_SECONDS}`;
+}
+
+function stopRecording(shouldSubmit) {
+  submitOnStop = shouldSubmit;
+  clearTimeout(recordAutoStopTimeout);
+  clearInterval(recordTimerInterval);
+  recordBtn.classList.remove("recording");
+  recordBtn.title = "Start recording";
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+    mediaStream = null;
+  }
+}
+
+function cancelRecording() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopRecording(false);
+  }
+}
+
+function onRecordingStopped() {
+  const mimeType = mediaRecorder.mimeType || "audio/webm";
+  const blob = new Blob(recordedChunks, { type: mimeType });
+  recordedChunks = [];
+  recordTimeEl.textContent = `0:00 / 0:${RECORD_LIMIT_SECONDS}`;
+  if (submitOnStop && blob.size > 0) {
+    recordHintEl.textContent = RECORD_DEFAULT_HINT;
+    submitRecording(blob, mimeType);
+  } else {
+    recordHintEl.textContent = RECORD_DEFAULT_HINT;
+  }
+}
+
+async function submitRecording(blob, mimeType) {
+  statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
+  resetStage();
+
+  // Name it with a video-classified extension matching the real container
+  // (webm/mp4) so the backend runs it through ffmpeg extraction, which
+  // handles these codecs more reliably than feeding them to librosa directly.
+  const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+  const file = new File([blob], `recording.${ext}`, { type: mimeType });
+
+  const objectUrl = URL.createObjectURL(blob);
+  player.src = objectUrl;
+  videoPreview.style.display = "none";
+  activePlayer = player;
+  bindPlayerOnce(activePlayer);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error (${res.status})`);
+    }
+    const data = await res.json();
     onTranscribed(data);
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
