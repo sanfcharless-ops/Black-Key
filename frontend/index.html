@@ -87,6 +87,67 @@
   .cta:hover { background: #bf9066; transform: translateY(-1px); }
   .cta:active { transform: translateY(0); }
 
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem; left: 50%;
+    transform: translateX(-50%);
+    color: var(--muted);
+    opacity: 0.6;
+    animation: scrollBounce 2.2s ease-in-out infinite;
+    cursor: pointer;
+  }
+  @keyframes scrollBounce {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, 8px); }
+  }
+
+  .reveal-section {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 4rem 2rem;
+    position: relative;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .reveal-section .section-eyebrow {
+    font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 1rem;
+  }
+  .reveal-section h2 {
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 700; letter-spacing: -0.02em;
+    max-width: 40rem; margin: 0 0 1.2rem;
+    color: var(--text);
+  }
+  .reveal-section p {
+    font-size: 1.05rem; line-height: 1.7; color: var(--muted);
+    max-width: 34rem; margin: 0 auto 2rem;
+  }
+  .reveal-chips {
+    display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center;
+    max-width: 40rem;
+  }
+  .reveal-chip {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+  .beta-section { background: #0e0e10; }
+  .beta-section .section-eyebrow { color: var(--hand-right); }
+  .reveal-section, .reveal-section * {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal-section.in-view, .reveal-section.in-view * {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   /* ---------- App ---------- */
   #app {
     display: none;
@@ -248,6 +309,26 @@
     border-radius: 999px;
     padding: 0.1rem 0.4rem;
   }
+  .beta-badge {
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+    background: rgba(13,15,16,0.75);
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.1rem 0.4rem;
+    vertical-align: middle;
+  }
+  .beta-callout {
+    margin-top: 1.25rem;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid rgba(92,184,228,0.25);
+    background: rgba(92,184,228,0.06);
+    border-radius: 10px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  .beta-callout strong { color: var(--text); font-weight: 600; }
   .record-btn {
     width: 64px; height: 64px;
     border-radius: 50%;
@@ -492,7 +573,32 @@
   <h1>keydrops</h1>
   <p>Upload a piano recording — or paste a TikTok or YouTube link — and watch it fall into place, note by note, played back exactly as you recorded it.</p>
   <button class="cta" id="getStarted">Get started</button>
+  <div class="scroll-hint" id="scrollHint" title="Scroll for more">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 8l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
 </div>
+
+<section class="reveal-section" id="revealWhy">
+  <span class="section-eyebrow">Why keydrops</span>
+  <h2>Nobody ever replies with the tutorial.</h2>
+  <p>You've seen it a hundred times — someone posts an incredible cover, and the replies are all "tutorial please?" and
+     "how do you do this??" with nothing ever coming of it. keydrops skips the waiting entirely: paste the link, and
+     it shows you the notes itself.</p>
+  <div class="reveal-chips">
+    <span class="reveal-chip">Upload a file, paste a link, or play live</span>
+    <span class="reveal-chip">Falls note by note, synced to the audio</span>
+    <span class="reveal-chip">Note names in English or Spanish</span>
+  </div>
+</section>
+
+<section class="reveal-section beta-section" id="revealBeta">
+  <span class="section-eyebrow">Heads up</span>
+  <h2>Recording live? Still finding its footing.</h2>
+  <p>Uploading a file or pasting a link usually means clean, already-recorded audio. A live mic in your room picks up
+     everything else too — so for now, expect the most accurate results from a file or link, with live recording as
+     the more experimental option while we keep tuning it.</p>
+  <button class="cta" id="getStartedFromBeta">Get started</button>
+</section>
 
 <div id="app">
   <div class="container">
@@ -519,7 +625,7 @@
       <div id="sourceTabs">
         <div class="source-tab active" id="tabFile">Upload file</div>
         <div class="source-tab" id="tabLink">Video link</div>
-        <div class="source-tab" id="tabRecord">Record</div>
+        <div class="source-tab" id="tabRecord">Record <span class="beta-badge">Beta</span></div>
       </div>
 
       <div id="filePane">
@@ -550,6 +656,12 @@
           </button>
           <div class="record-time" id="recordTime">0:00 / 0:30</div>
           <div class="hint" id="recordHint">Record up to 30 seconds of live piano playing.</div>
+        </div>
+        <div class="beta-callout">
+          <strong>Recording live is still experimental.</strong> Room noise and mic placement make it noticeably less
+          accurate than uploading a file or pasting a link — those tend to already be cleanly recorded, while a live
+          mic picks up everything around it too. Try it, but expect more mistakes here than the other two options
+          while we keep improving it.
         </div>
       </div>
 
@@ -616,10 +728,28 @@ const CLIENT_ID = getClientId();
 
 const landing = document.getElementById("landing");
 const app = document.getElementById("app");
-document.getElementById("getStarted").addEventListener("click", () => {
+const revealWhy = document.getElementById("revealWhy");
+const revealBeta = document.getElementById("revealBeta");
+function enterApp() {
   landing.classList.add("hidden");
+  revealWhy.style.display = "none";
+  revealBeta.style.display = "none";
   app.classList.add("visible");
+  window.scrollTo(0, 0);
+}
+document.getElementById("getStarted").addEventListener("click", enterApp);
+document.getElementById("getStartedFromBeta").addEventListener("click", enterApp);
+
+document.getElementById("scrollHint").addEventListener("click", () => {
+  revealWhy.scrollIntoView({ behavior: "smooth" });
 });
+
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (entry.isIntersecting) entry.target.classList.add("in-view");
+  });
+}, { threshold: 0.25 });
+[revealWhy, revealBeta].forEach((el) => revealObserver.observe(el));
 
 // ---------- Top-right menu ----------
 const menuBtn = document.getElementById("menuBtn");
