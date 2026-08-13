@@ -85,6 +85,7 @@ class TranscriptionResult(BaseModel):
     uses_remaining: int | None
     is_video: bool
     audio_url: str | None = None
+    tempo_bpm: float = 120.0
 
 
 class TranscribeURLPayload(BaseModel):
@@ -142,7 +143,7 @@ async def transcribe(file: UploadFile = File(...), user_id: str | None = None):
             extract_audio_from_video(tmp_input, extracted_path)
             audio_path = extracted_path
 
-        notes, duration = run_transcription(audio_path)
+        notes, duration, tempo_bpm = run_transcription(audio_path)
     finally:
         for p in (tmp_input, extracted_path):
             if p and os.path.exists(p):
@@ -153,6 +154,7 @@ async def transcribe(file: UploadFile = File(...), user_id: str | None = None):
         duration_seconds=duration,
         uses_remaining=uses_remaining(uid),
         is_video=is_video,
+        tempo_bpm=tempo_bpm,
     )
 
 
@@ -197,7 +199,7 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
         raise HTTPException(400, f"Couldn't fetch that video: {result.stderr[-500:]}")
 
     try:
-        notes, duration = run_transcription(audio_path)
+        notes, duration, tempo_bpm = run_transcription(audio_path)
     except Exception:
         os.remove(audio_path)
         raise
@@ -211,6 +213,7 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
         uses_remaining=uses_remaining(uid),
         is_video=True,
         audio_url=audio_url,
+        tempo_bpm=tempo_bpm,
     )
 
 
@@ -327,4 +330,16 @@ def run_transcription(audio_path: str):
     ]
 
     duration = librosa.get_duration(path=audio_path)
-    return notes, duration
+
+    # Best-effort tempo estimate, used client-side to quantize notes onto a
+    # rhythmic grid for sheet music rendering. Beat tracking is itself an
+    # estimate — it can drift on rubato/expressive playing — so treat the
+    # resulting notation as approximate, not a precise transcription.
+    try:
+        y_tempo, sr_tempo = librosa.load(audio_path, sr=None, mono=True)
+        tempo_estimate, _ = librosa.beat.beat_track(y=y_tempo, sr=sr_tempo)
+        tempo_bpm = round(float(tempo_estimate), 1) if tempo_estimate else 120.0
+    except Exception:
+        tempo_bpm = 120.0
+
+    return notes, duration, tempo_bpm

@@ -7,6 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.min.js"></script>
 <style>
   :root {
     --bg: #050403;
@@ -242,6 +243,43 @@
   }
   .source-tab.active { background: var(--accent); color: #12100d; }
 
+  /* ---------- View mode (falling notes / sheet music / both) ---------- */
+  #viewModeGroup {
+    display: none;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+    background: var(--panel-2);
+    border-radius: 10px;
+    padding: 0.3rem;
+  }
+  .view-mode-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    text-align: center;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .view-mode-btn.active { background: var(--accent); color: #12100d; }
+  .view-mode-btn.active .beta-badge { background: rgba(13,15,16,0.75); }
+
+  #sheetMusicWrap { display: none; background: #0e0e10; border-radius: 0 0 12px 12px; padding: 1rem; }
+  #sheetMusicHint {
+    font-size: 0.76rem; color: var(--muted); line-height: 1.5;
+    margin-bottom: 0.75rem; padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  #sheetMusicContainer { overflow-x: auto; overflow-y: hidden; }
+  #sheetMusicContainer svg { display: block; }
+  .vf-note-active path, .vf-note-active .vf-notehead { fill: var(--accent) !important; }
+
   .upload-zone {
     border: 1px dashed rgba(255,255,255,0.15);
     border-radius: 12px;
@@ -367,8 +405,9 @@
     margin-bottom: 0.75rem;
   }
   #seekTime { font-size: 0.78rem; color: var(--muted); min-width: 38px; }
+  #seekTrackWrap { position: relative; flex: 1; display: flex; align-items: center; }
   input[type="range"]#seekbar {
-    flex: 1;
+    width: 100%;
     -webkit-appearance: none;
     height: 5px;
     border-radius: 999px;
@@ -472,6 +511,45 @@
     border-right: 1px solid var(--border);
   }
   #transposeLabel b { color: var(--text); }
+
+  #loopGroup {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  #loopGroup button {
+    background: transparent;
+    color: var(--text);
+    border: none;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #loopGroup button:hover { background: rgba(255,255,255,0.06); }
+  #loopGroup.active { border-color: var(--hand-right); }
+  #loopGroup.active #loopSetA, #loopGroup.active #loopSetB { color: var(--hand-right); }
+  #loopLabel {
+    font-size: 0.78rem;
+    color: var(--muted);
+    padding: 0 0.4rem;
+    min-width: 0;
+  }
+  #loopClear { display: none; border-left: 1px solid var(--border); color: var(--muted) !important; }
+  #loopGroup.active #loopClear { display: inline-block; }
+
+  .loop-region {
+    position: absolute;
+    top: 0; height: 100%;
+    background: rgba(92,184,228,0.3);
+    border-radius: 999px;
+    pointer-events: none;
+    display: none;
+  }
 
   /* ---------- Background image control ---------- */
   #bgRow {
@@ -681,6 +759,12 @@
           <button id="transposeUp" title="Transpose up a semitone">+</button>
         </div>
         <button class="control" id="noteLangToggle" title="Switch note name language">Notes: EN</button>
+        <div id="loopGroup">
+          <button class="control" id="loopSetA" title="Set practice loop start to current position">Set A</button>
+          <button class="control" id="loopSetB" title="Set practice loop end to current position">Set B</button>
+          <span id="loopLabel"></span>
+          <button class="control" id="loopClear" title="Clear practice loop">Clear</button>
+        </div>
       </div>
 
       <div id="bgRow">
@@ -693,8 +777,17 @@
 
       <div id="seekRow">
         <span id="seekTime">0:00</span>
-        <input type="range" id="seekbar" min="0" max="100" value="0" step="0.1" />
+        <div id="seekTrackWrap">
+          <input type="range" id="seekbar" min="0" max="100" value="0" step="0.1" />
+          <div class="loop-region" id="loopRegion"></div>
+        </div>
         <span id="seekDuration">0:00</span>
+      </div>
+
+      <div id="viewModeGroup">
+        <button class="view-mode-btn active" data-mode="falling">Falling Notes</button>
+        <button class="view-mode-btn" data-mode="sheet">Sheet Music</button>
+        <button class="view-mode-btn" data-mode="both">Both <span class="beta-badge">Beta</span></button>
       </div>
 
       <div id="stage">
@@ -702,6 +795,13 @@
         <svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg>
       </div>
       <div id="keyboard"></div>
+
+      <div id="sheetMusicWrap">
+        <div id="sheetMusicHint">Sheet music is approximate — rhythm is quantized from an estimated tempo, not a
+          precise transcription, and hand assignment uses the same guess as the falling notes.</div>
+        <div id="sheetMusicContainer"></div>
+      </div>
+
       <div id="status"></div>
       <audio id="player" style="display:none"></audio>
     </div>
@@ -1080,22 +1180,31 @@ function resetStage() {
   seekRow.style.display = "none";
   document.getElementById("bgRow").style.display = "none";
   document.getElementById("keyboard").style.display = "none";
+  document.getElementById("viewModeGroup").style.display = "none";
+  document.getElementById("sheetMusicWrap").style.display = "none";
   transposeSemitones = 0;
   transposeVal.textContent = "0";
+  clearLoop();
 }
+
+let tempoBpm = 120;
 
 function onTranscribed(data) {
   rawNotes = data.notes;
+  tempoBpm = data.tempo_bpm || 120;
   const usesNote = data.uses_remaining === null || data.uses_remaining === undefined
     ? ""
     : ` ${data.uses_remaining} free uses left this month.`;
   statusEl.textContent = `Done. ${data.notes.length} notes detected.${usesNote}`;
   renderNotes();
+  renderSheetMusic();
   stage.style.display = "block";
   document.getElementById("keyboard").style.display = "block";
   controls.style.display = "flex";
   document.getElementById("bgRow").style.display = "flex";
   seekRow.style.display = "flex";
+  document.getElementById("viewModeGroup").style.display = "flex";
+  applyViewMode();
 }
 
 function transposedNotes() {
@@ -1291,7 +1400,7 @@ document.getElementById("transposeDown").addEventListener("click", () => setTran
 function setTranspose(v) {
   transposeSemitones = Math.max(-12, Math.min(12, v));
   transposeVal.textContent = (transposeSemitones > 0 ? "+" : "") + transposeSemitones;
-  if (rawNotes.length) renderNotes();
+  if (rawNotes.length) { renderNotes(); renderSheetMusic(); }
 }
 
 // ---------- Note name language (English letters vs. Spanish solfège) ----------
@@ -1350,11 +1459,205 @@ function positionNotesAt(elapsed) {
       if (keyEl) keyEl.classList.add(hand === "right" ? "lit-right" : "lit-left");
     }
   });
+  updateSheetHighlight(elapsed);
 }
 
 function tick() {
+  if (loopB !== null && activePlayer.currentTime >= loopB) {
+    activePlayer.currentTime = loopA;
+  }
   positionNotesAt(activePlayer.currentTime);
   if (playing) animFrame = requestAnimationFrame(tick);
+}
+
+// ---------- Practice mode (A/B loop) ----------
+let loopA = null;
+let loopB = null;
+const loopGroupEl = document.getElementById("loopGroup");
+const loopLabelEl = document.getElementById("loopLabel");
+const loopRegionEl = document.getElementById("loopRegion");
+
+function updateLoopUI() {
+  const bothSet = loopA !== null && loopB !== null;
+  loopGroupEl.classList.toggle("active", bothSet);
+  loopLabelEl.textContent = bothSet ? `${fmtTime(loopA)}–${fmtTime(loopB)}` : "";
+  loopRegionEl.style.display = bothSet ? "block" : "none";
+  if (bothSet && seekbar.max > 0) {
+    const leftPct = (loopA / seekbar.max) * 100;
+    const widthPct = ((loopB - loopA) / seekbar.max) * 100;
+    loopRegionEl.style.left = `${leftPct}%`;
+    loopRegionEl.style.width = `${widthPct}%`;
+  }
+}
+
+function clearLoop() {
+  loopA = null;
+  loopB = null;
+  updateLoopUI();
+}
+
+document.getElementById("loopSetA").addEventListener("click", () => {
+  const t = activePlayer.currentTime;
+  if (loopB !== null && t >= loopB) { loopA = loopB; loopB = t; } else { loopA = t; }
+  updateLoopUI();
+});
+document.getElementById("loopSetB").addEventListener("click", () => {
+  const t = activePlayer.currentTime;
+  if (loopA !== null && t <= loopA) { loopB = loopA; loopA = t; } else { loopB = t; }
+  updateLoopUI();
+});
+document.getElementById("loopClear").addEventListener("click", clearLoop);
+
+// ---------- View mode: falling notes / sheet music / both ----------
+let viewMode = "falling";
+document.querySelectorAll(".view-mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".view-mode-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    viewMode = btn.dataset.mode;
+    applyViewMode();
+  });
+});
+function applyViewMode() {
+  const showFalling = viewMode === "falling" || viewMode === "both";
+  const showSheet = viewMode === "sheet" || viewMode === "both";
+  stage.style.display = showFalling ? "block" : "none";
+  document.getElementById("keyboard").style.display = showFalling ? "block" : "none";
+  document.getElementById("sheetMusicWrap").style.display = showSheet ? "block" : "none";
+}
+
+// ---------- Sheet music rendering (VexFlow) ----------
+// Approximate, not precise: note timing is quantized onto a 16th-note grid
+// derived from an estimated tempo (see backend tempo_bpm), long gaps between
+// notes are capped rather than represented with exact rests, and hand/staff
+// assignment reuses the same register-split heuristic as the falling notes.
+let sheetNoteElements = []; // [{el, start, end}] for sync highlighting in "Both" mode
+
+function midiToVexKey(midi) {
+  const letter = NOTE_NAMES_EN[midi % 12].toLowerCase();
+  const octave = Math.floor(midi / 12) - 1;
+  return `${letter}/${octave}`;
+}
+
+function nearestDurationTicks(ticks) {
+  const options = [1, 2, 3, 4, 6, 8];
+  let best = options[0], bestDiff = Infinity;
+  for (const o of options) {
+    const diff = Math.abs(o - ticks);
+    if (diff < bestDiff) { bestDiff = diff; best = o; }
+  }
+  return best;
+}
+function ticksToDurationStr(ticks) {
+  return { 1: "16", 2: "8", 3: "8d", 4: "q", 6: "qd", 8: "h" }[ticks] || "q";
+}
+
+function renderSheetMusic() {
+  const container = document.getElementById("sheetMusicContainer");
+  container.innerHTML = "";
+  sheetNoteElements = [];
+
+  const notes = transposedNotes();
+  if (!notes.length || !window.Vex) return;
+
+  const VF = Vex.Flow;
+  const beatSec = 60 / (tempoBpm || 120);
+  const sixteenthSec = beatSec / 4;
+  const MAX_TICKS = 8; // cap a single note/rest at a half note
+
+  function toTicks(t) { return Math.max(0, Math.round(t / sixteenthSec)); }
+
+  function buildChords(staffNotes) {
+    const byTick = new Map();
+    staffNotes.forEach((n) => {
+      const tick = toTicks(n.start_time);
+      if (!byTick.has(tick)) byTick.set(tick, []);
+      byTick.get(tick).push(n);
+    });
+    return [...byTick.entries()].sort((a, b) => a[0] - b[0]).map(([tick, group]) => ({ tick, group }));
+  }
+
+  const trebleChords = buildChords(notes.filter((n) => handFor(n.pitch) === "right"));
+  const bassChords = buildChords(notes.filter((n) => handFor(n.pitch) === "left"));
+  if (!trebleChords.length && !bassChords.length) return;
+
+  function buildStaveNotes(chords, clef) {
+    const staveNotes = [];
+    let totalTicks16 = 0;
+    for (let i = 0; i < chords.length; i++) {
+      const { tick, group } = chords[i];
+      const nextTick = i + 1 < chords.length ? chords[i + 1].tick : tick + 4;
+      const available = Math.max(1, nextTick - tick);
+      const renderTicks = nearestDurationTicks(Math.min(available, MAX_TICKS));
+      const duration = ticksToDurationStr(renderTicks);
+
+      const uniquePitches = [...new Set(group.map((n) => n.pitch))].sort((a, b) => a - b);
+      const keys = uniquePitches.map(midiToVexKey);
+      const staveNote = new VF.StaveNote({ keys, duration, clef });
+      uniquePitches.forEach((p, idx) => {
+        if (NOTE_NAMES_EN[p % 12].includes("#")) staveNote.addModifier(new VF.Accidental("#"), idx);
+      });
+
+      totalTicks16 += renderTicks;
+      staveNotes.push({
+        staveNote,
+        start: Math.min(...group.map((n) => n.start_time)),
+        end: Math.max(...group.map((n) => n.start_time + n.duration)),
+      });
+    }
+    return { staveNotes, totalTicks16 };
+  }
+
+  const treble = buildStaveNotes(trebleChords, "treble");
+  const bass = buildStaveNotes(bassChords, "bass");
+
+  const totalChords = treble.staveNotes.length + bass.staveNotes.length;
+  const width = Math.max(500, totalChords * 45 + 150);
+  const height = 260;
+
+  const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const ctx = renderer.getContext();
+  const staveWidth = width - 40;
+
+  const trebleStave = new VF.Stave(10, 20, staveWidth);
+  trebleStave.addClef("treble");
+  trebleStave.setContext(ctx).draw();
+
+  const bassStave = new VF.Stave(10, 140, staveWidth);
+  bassStave.addClef("bass");
+  bassStave.setContext(ctx).draw();
+
+  try {
+    const brace = new VF.StaveConnector(trebleStave, bassStave);
+    brace.setType(VF.StaveConnector.type.BRACE);
+    brace.setContext(ctx).draw();
+    const line = new VF.StaveConnector(trebleStave, bassStave);
+    line.setType(VF.StaveConnector.type.SINGLE_LEFT);
+    line.setContext(ctx).draw();
+  } catch (e) { /* cosmetic only — skip the brace if this VexFlow build's API differs */ }
+
+  function drawVoice(built, stave) {
+    if (!built.staveNotes.length) return;
+    const voice = new VF.Voice({ num_beats: Math.max(1, Math.ceil(built.totalTicks16 / 4)), beat_value: 4 });
+    voice.setStrict(false);
+    voice.addTickables(built.staveNotes.map((s) => s.staveNote));
+    new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 60);
+    voice.draw(ctx, stave);
+    built.staveNotes.forEach((s) => {
+      const el = s.staveNote.getSVGElement ? s.staveNote.getSVGElement() : null;
+      if (el) sheetNoteElements.push({ el, start: s.start, end: s.end });
+    });
+  }
+
+  drawVoice(treble, trebleStave);
+  drawVoice(bass, bassStave);
+}
+
+function updateSheetHighlight(elapsed) {
+  sheetNoteElements.forEach(({ el, start, end }) => {
+    el.classList.toggle("vf-note-active", elapsed >= start && elapsed <= end);
+  });
 }
 </script>
 </body>
