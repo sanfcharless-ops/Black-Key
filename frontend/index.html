@@ -792,6 +792,7 @@
           <span id="loopLabel"></span>
           <button class="control" id="loopClear" title="Clear practice loop">Clear</button>
         </div>
+        <button class="control" id="downloadMidiBtn" title="Download the detected notes as a MIDI file">Download MIDI</button>
       </div>
 
       <div id="bgRow">
@@ -1567,6 +1568,69 @@ document.getElementById("loopSetB").addEventListener("click", () => {
   updateLoopUI();
 });
 document.getElementById("loopClear").addEventListener("click", clearLoop);
+
+// ---------- MIDI export ----------
+// Standard MIDI File, format 0, single track — written by hand since the
+// format is simple enough not to need a library. Interpreting the
+// whiteboard's "share transcribed video elsewhere or save on your phone"
+// as needing a portable, genuinely useful export: MIDI opens in essentially
+// every DAW, notation program, and keyboard on the planet. A rendered
+// video export (capturing the falling-notes animation + audio) would be a
+// much bigger lift — canvas/SVG capture, audio muxing — and is a
+// reasonable follow-up if that's specifically what's wanted later.
+function encodeVLQ(value) {
+  const bytes = [value & 0x7f];
+  value >>= 7;
+  while (value > 0) {
+    bytes.unshift((value & 0x7f) | 0x80);
+    value >>= 7;
+  }
+  return bytes;
+}
+
+function notesToMidiBytes(notes, bpm) {
+  const PPQ = 480;
+  const ticksPerSecond = (bpm * PPQ) / 60;
+
+  const events = [];
+  notes.forEach((n) => {
+    const onTick = Math.round(n.start_time * ticksPerSecond);
+    const offTick = Math.max(onTick + 1, Math.round((n.start_time + n.duration) * ticksPerSecond));
+    events.push({ tick: onTick, type: "on", pitch: n.pitch, velocity: Math.max(1, Math.min(127, n.velocity || 80)) });
+    events.push({ tick: offTick, type: "off", pitch: n.pitch, velocity: 0 });
+  });
+  events.sort((a, b) => a.tick - b.tick || (a.type === "off" ? -1 : 1));
+
+  const track = [];
+  const microsPerQuarter = Math.round(60000000 / bpm);
+  track.push(...encodeVLQ(0), 0xff, 0x51, 0x03, (microsPerQuarter >> 16) & 0xff, (microsPerQuarter >> 8) & 0xff, microsPerQuarter & 0xff);
+
+  let lastTick = 0;
+  events.forEach((e) => {
+    track.push(...encodeVLQ(Math.max(0, e.tick - lastTick)));
+    track.push(e.type === "on" ? 0x90 : 0x80, e.pitch & 0x7f, e.velocity & 0x7f);
+    lastTick = e.tick;
+  });
+  track.push(...encodeVLQ(0), 0xff, 0x2f, 0x00);
+
+  const header = [0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, (PPQ >> 8) & 0xff, PPQ & 0xff];
+  const trackHeader = [0x4d, 0x54, 0x72, 0x6b, (track.length >>> 24) & 0xff, (track.length >>> 16) & 0xff, (track.length >>> 8) & 0xff, track.length & 0xff];
+  return new Uint8Array([...header, ...trackHeader, ...track]);
+}
+
+document.getElementById("downloadMidiBtn").addEventListener("click", () => {
+  if (!rawNotes.length) return;
+  const bytes = notesToMidiBytes(transposedNotes(), tempoBpm || 120);
+  const blob = new Blob([bytes], { type: "audio/midi" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "keydrops-transcription.mid";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
 // ---------- View mode: falling notes / sheet music / both ----------
 let viewMode = "falling";
