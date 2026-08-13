@@ -53,7 +53,9 @@ AUDIO_ID_RE = re.compile(r"^[0-9a-f-]{36}\.wav$")
 AUDIO_RETENTION_SECONDS = 600
 
 usage_counts: Dict[str, int] = {}
-FREE_USES_PER_MONTH = 3
+# Bumped up while actively testing — the real per-user free-tier limit
+# should come back down before this goes out to real users.
+FREE_USES_PER_MONTH = 100
 
 
 class NoteEvent(BaseModel):

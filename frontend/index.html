@@ -368,7 +368,7 @@
 
       <div id="filePane">
         <div class="upload-zone" id="dropZone">
-          <input type="file" id="fileInput" accept="audio/*,video/*" />
+          <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.mp4,.mov,.m4v,.webm" />
           <div>Click to choose a file, or drag one here</div>
           <div class="hint">MP3, WAV, M4A, MP4, MOV — up to 60MB</div>
         </div>
@@ -427,6 +427,18 @@
 <script>
 // Point this at your deployed backend.
 const API_URL = "https://black-key-production.up.railway.app";
+
+// Each browser gets its own persistent ID so the free-use limit is per
+// device, not one shared bucket for every visitor to the site.
+function getClientId() {
+  let id = localStorage.getItem("blackkey_client_id");
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem("blackkey_client_id", id);
+  }
+  return id;
+}
+const CLIENT_ID = getClientId();
 
 const landing = document.getElementById("landing");
 const app = document.getElementById("app");
@@ -521,7 +533,7 @@ async function handleFile(file) {
   formData.append("file", file);
 
   try {
-    const res = await fetch(`${API_URL}/transcribe`, { method: "POST", body: formData });
+    const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Server error (${res.status})`);
@@ -550,7 +562,7 @@ async function handleTikTokLink() {
   bindPlayerOnce(activePlayer);
 
   try {
-    const res = await fetch(`${API_URL}/transcribe-url`, {
+    const res = await fetch(`${API_URL}/transcribe-url?user_id=${encodeURIComponent(CLIENT_ID)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
