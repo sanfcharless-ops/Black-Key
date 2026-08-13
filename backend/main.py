@@ -290,6 +290,13 @@ def run_transcription(audio_path: str):
     to cut down on stray/ghost notes from pedal resonance or noise,
     at a small cost to catching very quiet notes. Worth revisiting
     once we've tested against real recordings.
+
+    minimum_note_length was 90ms; testing against a fast 12-note-in-1.4s
+    run showed it dropping 8 of 12 notes (Basic Pitch's model resolves
+    the pitch fine, but a note shorter than the floor gets discarded
+    entirely). 50ms recovered 11 of 12 with zero change on clean/noisy
+    sustained-tone test cases — fast, dense passages need the shorter
+    floor, and nothing else seemed to regress from lowering it.
     """
     from basic_pitch.inference import predict
     from basic_pitch import ICASSP_2022_MODEL_PATH
@@ -302,7 +309,7 @@ def run_transcription(audio_path: str):
             ICASSP_2022_MODEL_PATH,
             onset_threshold=0.6,        # higher = fewer false-positive note starts
             frame_threshold=0.35,       # higher = less bleed/smearing between notes
-            minimum_note_length=90,     # ms; drops very short spurious blips
+            minimum_note_length=50,     # ms; drops very short spurious blips
             minimum_frequency=27.5,     # A0, bottom of an 88-key piano
             maximum_frequency=4186.0,   # C8, top of an 88-key piano
         )

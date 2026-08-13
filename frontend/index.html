@@ -169,6 +169,39 @@
     padding: 2.5rem 1rem;
     text-align: center;
   }
+  .duration-group {
+    display: inline-flex;
+    gap: 0.4rem;
+    margin-bottom: 1.75rem;
+    background: var(--panel-2);
+    border-radius: 10px;
+    padding: 0.3rem;
+  }
+  .duration-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-radius: 7px;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .duration-btn:hover { color: var(--text); }
+  .duration-btn.active { background: var(--accent); color: #12100d; }
+  .duration-btn.pro.active { background: var(--panel-2); color: var(--muted); }
+  .pro-badge {
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    background: rgba(184,149,106,0.2);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 0.1rem 0.4rem;
+  }
   .record-btn {
     width: 64px; height: 64px;
     border-radius: 50%;
@@ -445,6 +478,11 @@
 
       <div id="recordPane">
         <div class="record-zone">
+          <div class="duration-group" id="durationGroup">
+            <button class="duration-btn active" data-seconds="30">30s</button>
+            <button class="duration-btn" data-seconds="45">45s</button>
+            <button class="duration-btn pro" data-seconds="60">60s <span class="pro-badge">Pro</span></button>
+          </div>
           <button class="record-btn" id="recordBtn" title="Start recording">
             <span class="record-dot"></span>
           </button>
@@ -670,12 +708,16 @@ async function handleTikTokLink() {
   }
 }
 
-// ---------- Live mic recording (up to 30 seconds) ----------
-const RECORD_LIMIT_SECONDS = 30;
+// ---------- Live mic recording (duration selectable; 60s is Pro-only) ----------
+const PRO_UNLOCKED = false; // 60s stays Pro-gated — flip this once real accounts/payment exist
+let RECORD_LIMIT_SECONDS = 30;
 const recordBtn = document.getElementById("recordBtn");
 const recordTimeEl = document.getElementById("recordTime");
 const recordHintEl = document.getElementById("recordHint");
-const RECORD_DEFAULT_HINT = recordHintEl.textContent;
+const durationGroup = document.getElementById("durationGroup");
+function defaultRecordHint() {
+  return `Record up to ${RECORD_LIMIT_SECONDS} seconds of live piano playing.`;
+}
 
 let mediaRecorder = null;
 let mediaStream = null;
@@ -684,6 +726,22 @@ let recordStartTime = 0;
 let recordTimerInterval = null;
 let recordAutoStopTimeout = null;
 let submitOnStop = true;
+
+durationGroup.querySelectorAll(".duration-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const seconds = parseInt(btn.dataset.seconds, 10);
+    if (btn.classList.contains("pro") && !PRO_UNLOCKED) {
+      recordHintEl.textContent = "60-second recordings are a Pro feature — upgrade to unlock.";
+      return;
+    }
+    if (mediaRecorder && mediaRecorder.state === "recording") return; // don't swap limits mid-recording
+    durationGroup.querySelectorAll(".duration-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    RECORD_LIMIT_SECONDS = seconds;
+    recordTimeEl.textContent = `0:00 / ${fmtTime(seconds)}`;
+    recordHintEl.textContent = defaultRecordHint();
+  });
+});
 
 function pickRecorderMimeType() {
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
@@ -733,7 +791,7 @@ async function startRecording() {
 
 function updateRecordTimer() {
   const elapsed = Math.min(RECORD_LIMIT_SECONDS, (Date.now() - recordStartTime) / 1000);
-  recordTimeEl.textContent = `${fmtTime(elapsed)} / 0:${RECORD_LIMIT_SECONDS}`;
+  recordTimeEl.textContent = `${fmtTime(elapsed)} / ${fmtTime(RECORD_LIMIT_SECONDS)}`;
 }
 
 function stopRecording(shouldSubmit) {
@@ -761,12 +819,10 @@ function onRecordingStopped() {
   const mimeType = mediaRecorder.mimeType || "audio/webm";
   const blob = new Blob(recordedChunks, { type: mimeType });
   recordedChunks = [];
-  recordTimeEl.textContent = `0:00 / 0:${RECORD_LIMIT_SECONDS}`;
+  recordTimeEl.textContent = `0:00 / ${fmtTime(RECORD_LIMIT_SECONDS)}`;
+  recordHintEl.textContent = defaultRecordHint();
   if (submitOnStop && blob.size > 0) {
-    recordHintEl.textContent = RECORD_DEFAULT_HINT;
     submitRecording(blob, mimeType);
-  } else {
-    recordHintEl.textContent = RECORD_DEFAULT_HINT;
   }
 }
 
