@@ -149,6 +149,44 @@
     transform: translateY(0);
   }
 
+  /* ---------- Loading screen ---------- */
+  #loadingScreen {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 200;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.75rem;
+    background: linear-gradient(120deg, #050403, #1c1309, #0a1620, #050403, #150f08);
+    background-size: 400% 400%;
+    animation: loadingGradient 9s ease infinite;
+    text-align: center;
+    padding: 2rem;
+  }
+  #loadingScreen.visible { display: flex; }
+  @keyframes loadingGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #loadingSpinner {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent);
+    border-right-color: var(--hand-right);
+    animation: loadingSpin 0.9s linear infinite;
+  }
+  @keyframes loadingSpin { to { transform: rotate(360deg); } }
+  #loadingMessage {
+    color: var(--text);
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    max-width: 26rem;
+    transition: opacity 0.25s ease;
+  }
+
   /* ---------- App ---------- */
   #app {
     display: none;
@@ -751,6 +789,11 @@
   <button class="cta" id="getStartedFromBeta">Get started</button>
 </section>
 
+<div id="loadingScreen">
+  <div id="loadingSpinner"></div>
+  <p id="loadingMessage">Listening to every note…</p>
+</div>
+
 <div id="app">
   <div class="container">
     <div class="app-header">
@@ -1046,8 +1089,39 @@ let transposeSemitones = 0;
 
 const VIDEO_EXT = [".mp4", ".mov", ".m4v", ".webm"];
 
+const LOADING_MESSAGES = [
+  "Listening to every note…",
+  "Untangling the chords…",
+  "Teaching the keys where to fall…",
+  "Almost there…",
+];
+let loadingMessageInterval = null;
+const loadingScreenEl = document.getElementById("loadingScreen");
+const loadingMessageEl = document.getElementById("loadingMessage");
+
+function showLoadingScreen(initialMessage) {
+  loadingMessageEl.textContent = initialMessage || LOADING_MESSAGES[0];
+  loadingMessageEl.style.opacity = 1;
+  loadingScreenEl.classList.add("visible");
+  let i = 0;
+  clearInterval(loadingMessageInterval);
+  loadingMessageInterval = setInterval(() => {
+    i = (i + 1) % LOADING_MESSAGES.length;
+    loadingMessageEl.style.opacity = 0;
+    setTimeout(() => {
+      loadingMessageEl.textContent = LOADING_MESSAGES[i];
+      loadingMessageEl.style.opacity = 1;
+    }, 250);
+  }, 2200);
+}
+function hideLoadingScreen() {
+  clearInterval(loadingMessageInterval);
+  loadingScreenEl.classList.remove("visible");
+}
+
 async function handleFile(file) {
   statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
+  showLoadingScreen("Uploading your recording…");
   resetStage();
 
   const isVideo = VIDEO_EXT.some(ext => file.name.toLowerCase().endsWith(ext)) || file.type.startsWith("video/");
@@ -1078,6 +1152,8 @@ async function handleFile(file) {
     onTranscribed(data);
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
+  } finally {
+    hideLoadingScreen();
   }
 }
 
@@ -1090,6 +1166,7 @@ async function handleTikTokLink() {
   const url = tiktokUrl.value.trim();
   if (!url) return;
   statusEl.textContent = "Fetching that video and transcribing... this can take longer than a file upload.";
+  showLoadingScreen("Fetching that video…");
   resetStage();
 
   // No local video preview for links — audio-only playback of what we transcribed.
@@ -1114,6 +1191,8 @@ async function handleTikTokLink() {
     onTranscribed(data);
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
+  } finally {
+    hideLoadingScreen();
   }
 }
 
@@ -1237,6 +1316,7 @@ function onRecordingStopped() {
 
 async function submitRecording(blob, mimeType) {
   statusEl.textContent = "Uploading and transcribing... this can take a few seconds.";
+  showLoadingScreen("Uploading your recording…");
   resetStage();
 
   // Name it with a video-classified extension matching the real container
@@ -1264,6 +1344,8 @@ async function submitRecording(blob, mimeType) {
     onTranscribed(data);
   } catch (err) {
     statusEl.textContent = `Something went wrong: ${err.message}`;
+  } finally {
+    hideLoadingScreen();
   }
 }
 
