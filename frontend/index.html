@@ -593,7 +593,10 @@ function resetStage() {
 
 function onTranscribed(data) {
   rawNotes = data.notes;
-  statusEl.textContent = `Done. ${data.notes.length} notes detected. ${data.uses_remaining} free uses left this month.`;
+  const usesNote = data.uses_remaining === null || data.uses_remaining === undefined
+    ? ""
+    : ` ${data.uses_remaining} free uses left this month.`;
+  statusEl.textContent = `Done. ${data.notes.length} notes detected.${usesNote}`;
   renderNotes();
   stage.style.display = "block";
   document.getElementById("keyboard").style.display = "block";

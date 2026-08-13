@@ -53,9 +53,11 @@ AUDIO_ID_RE = re.compile(r"^[0-9a-f-]{36}\.wav$")
 AUDIO_RETENTION_SECONDS = 600
 
 usage_counts: Dict[str, int] = {}
-# Bumped up while actively testing — the real per-user free-tier limit
-# should come back down before this goes out to real users.
-FREE_USES_PER_MONTH = 100
+FREE_USES_PER_MONTH = 3
+# Off while it's just us testing solo — no real users yet, so there's no
+# one to gate. Flip back on (alongside real accounts/a Pro tier) before
+# this goes out to actual users.
+USAGE_LIMIT_ENABLED = False
 
 
 class NoteEvent(BaseModel):
@@ -68,7 +70,7 @@ class NoteEvent(BaseModel):
 class TranscriptionResult(BaseModel):
     notes: List[NoteEvent]
     duration_seconds: float
-    uses_remaining: int
+    uses_remaining: int | None
     is_video: bool
     audio_url: str | None = None
 
@@ -82,13 +84,18 @@ def get_user_id(cookie_id: str | None) -> str:
 
 
 def check_and_consume_usage(uid: str) -> None:
+    if not USAGE_LIMIT_ENABLED:
+        usage_counts[uid] = usage_counts.get(uid, 0) + 1
+        return
     used = usage_counts.get(uid, 0)
     if used >= FREE_USES_PER_MONTH:
         raise HTTPException(402, "Free monthly transcriptions used up. Upgrade to keep going.")
     usage_counts[uid] = used + 1
 
 
-def uses_remaining(uid: str) -> int:
+def uses_remaining(uid: str) -> int | None:
+    if not USAGE_LIMIT_ENABLED:
+        return None
     return max(0, FREE_USES_PER_MONTH - usage_counts.get(uid, 0))
 
 
