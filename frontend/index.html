@@ -158,7 +158,7 @@
     justify-content: center;
   }
   #app.visible { display: flex; }
-  .container { width: 100%; max-width: 780px; }
+  .container { width: 100%; max-width: 1600px; }
   .app-title {
     font-size: 1.2rem; font-weight: 700; margin: 0 0 0.25rem; letter-spacing: -0.01em;
     background: linear-gradient(90deg, #fff, var(--hand-right));
@@ -322,8 +322,8 @@
     margin-bottom: 0.75rem; padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border);
   }
-  #sheetMusicContainer { overflow-x: auto; overflow-y: hidden; }
-  #sheetMusicContainer svg { display: block; }
+  #sheetMusicContainer { overflow: visible; }
+  #sheetMusicContainer svg { display: block; margin: 0 auto; max-width: 100%; }
   .vf-note-active path, .vf-note-active .vf-notehead { fill: var(--accent) !important; }
 
   .upload-zone {
@@ -1863,6 +1863,7 @@ function renderSheetMusic() {
   const container = document.getElementById("sheetMusicContainer");
   container.innerHTML = "";
   sheetNoteElements = [];
+  lastAutoScrolledEl = null;
 
   const notes = transposedNotes();
   if (!notes.length || !window.Vex) return;
@@ -1870,7 +1871,9 @@ function renderSheetMusic() {
   const VF = Vex.Flow;
   const beatSec = 60 / (tempoBpm || 120);
   const sixteenthSec = beatSec / 4;
-  const MAX_TICKS = 8; // cap a single note/rest at a half note
+  const MAX_TICKS = 8;          // cap a single note/rest at a half note
+  const TICKS_PER_SYSTEM = 64;  // 4 measures of 4/4 per line, then wrap
+  const SYSTEM_HEIGHT = 220;
 
   function toTicks(t) { return Math.max(0, Math.round(t / sixteenthSec)); }
 
@@ -1888,83 +1891,106 @@ function renderSheetMusic() {
   const bassChords = buildChords(notes.filter((n) => handFor(n.pitch) === "left"));
   if (!trebleChords.length && !bassChords.length) return;
 
-  function buildStaveNotes(chords, clef) {
-    const staveNotes = [];
-    let totalTicks16 = 0;
-    for (let i = 0; i < chords.length; i++) {
-      const { tick, group } = chords[i];
-      const nextTick = i + 1 < chords.length ? chords[i + 1].tick : tick + 4;
-      const available = Math.max(1, nextTick - tick);
-      const renderTicks = nearestDurationTicks(Math.min(available, MAX_TICKS));
-      const duration = ticksToDurationStr(renderTicks);
-
-      const uniquePitches = [...new Set(group.map((n) => n.pitch))].sort((a, b) => a - b);
-      const keys = uniquePitches.map(midiToVexKey);
-      const staveNote = new VF.StaveNote({ keys, duration, clef });
-      uniquePitches.forEach((p, idx) => {
-        if (NOTE_NAMES_EN[p % 12].includes("#")) staveNote.addModifier(new VF.Accidental("#"), idx);
-      });
-
-      totalTicks16 += renderTicks;
-      staveNotes.push({
-        staveNote,
-        start: Math.min(...group.map((n) => n.start_time)),
-        end: Math.max(...group.map((n) => n.start_time + n.duration)),
-      });
-    }
-    return { staveNotes, totalTicks16 };
+  function makeStaveNote(group, tick, nextTick, clef) {
+    const available = Math.max(1, nextTick - tick);
+    const renderTicks = nearestDurationTicks(Math.min(available, MAX_TICKS));
+    const duration = ticksToDurationStr(renderTicks);
+    const uniquePitches = [...new Set(group.map((n) => n.pitch))].sort((a, b) => a - b);
+    const keys = uniquePitches.map(midiToVexKey);
+    const staveNote = new VF.StaveNote({ keys, duration, clef });
+    uniquePitches.forEach((p, idx) => {
+      if (NOTE_NAMES_EN[p % 12].includes("#")) staveNote.addModifier(new VF.Accidental("#"), idx);
+    });
+    return {
+      staveNote,
+      renderTicks,
+      start: Math.min(...group.map((n) => n.start_time)),
+      end: Math.max(...group.map((n) => n.start_time + n.duration)),
+    };
   }
 
-  const treble = buildStaveNotes(trebleChords, "treble");
-  const bass = buildStaveNotes(bassChords, "bass");
+  const lastTick = Math.max(
+    trebleChords.length ? trebleChords[trebleChords.length - 1].tick : 0,
+    bassChords.length ? bassChords[bassChords.length - 1].tick : 0
+  );
+  const numSystems = Math.max(1, Math.ceil((lastTick + 4) / TICKS_PER_SYSTEM));
 
-  const totalChords = treble.staveNotes.length + bass.staveNotes.length;
-  const width = Math.max(500, totalChords * 45 + 150);
-  const height = 260;
+  // Wide enough to use the available space, but a real line of notation
+  // gets harder to read past a point — cap it rather than stretching one
+  // system across an ultra-wide window.
+  const systemWidth = Math.min(1100, Math.max(500, container.clientWidth - 20 || 900));
 
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(width, height);
+  renderer.resize(systemWidth + 30, numSystems * SYSTEM_HEIGHT + 20);
   const ctx = renderer.getContext();
-  const staveWidth = width - 40;
 
-  const trebleStave = new VF.Stave(10, 20, staveWidth);
-  trebleStave.addClef("treble");
-  trebleStave.setContext(ctx).draw();
-
-  const bassStave = new VF.Stave(10, 140, staveWidth);
-  bassStave.addClef("bass");
-  bassStave.setContext(ctx).draw();
-
-  try {
-    const brace = new VF.StaveConnector(trebleStave, bassStave);
-    brace.setType(VF.StaveConnector.type.BRACE);
-    brace.setContext(ctx).draw();
-    const line = new VF.StaveConnector(trebleStave, bassStave);
-    line.setType(VF.StaveConnector.type.SINGLE_LEFT);
-    line.setContext(ctx).draw();
-  } catch (e) { /* cosmetic only — skip the brace if this VexFlow build's API differs */ }
-
-  function drawVoice(built, stave) {
-    if (!built.staveNotes.length) return;
-    const voice = new VF.Voice({ num_beats: Math.max(1, Math.ceil(built.totalTicks16 / 4)), beat_value: 4 });
+  function drawSystemVoice(chords, stave, clef, startTick, endTick) {
+    const inRange = chords.filter((c) => c.tick >= startTick && c.tick < endTick);
+    if (!inRange.length) return;
+    const built = [];
+    let totalTicks16 = 0;
+    for (let i = 0; i < inRange.length; i++) {
+      const nextTick = i + 1 < inRange.length ? inRange[i + 1].tick : endTick;
+      const entry = makeStaveNote(inRange[i].group, inRange[i].tick, nextTick, clef);
+      built.push(entry);
+      totalTicks16 += entry.renderTicks;
+    }
+    const voice = new VF.Voice({ num_beats: Math.max(1, Math.ceil(totalTicks16 / 4)), beat_value: 4 });
     voice.setStrict(false);
-    voice.addTickables(built.staveNotes.map((s) => s.staveNote));
-    new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 60);
+    voice.addTickables(built.map((b) => b.staveNote));
+    new VF.Formatter().joinVoices([voice]).format([voice], systemWidth - 60);
     voice.draw(ctx, stave);
-    built.staveNotes.forEach((s) => {
-      const el = s.staveNote.getSVGElement ? s.staveNote.getSVGElement() : null;
-      if (el) sheetNoteElements.push({ el, start: s.start, end: s.end });
+    built.forEach((b) => {
+      const el = b.staveNote.getSVGElement ? b.staveNote.getSVGElement() : null;
+      if (el) sheetNoteElements.push({ el, start: b.start, end: b.end });
     });
   }
 
-  drawVoice(treble, trebleStave);
-  drawVoice(bass, bassStave);
+  for (let sys = 0; sys < numSystems; sys++) {
+    const startTick = sys * TICKS_PER_SYSTEM;
+    const endTick = startTick + TICKS_PER_SYSTEM;
+    const y = 20 + sys * SYSTEM_HEIGHT;
+
+    const trebleStave = new VF.Stave(10, y, systemWidth);
+    trebleStave.addClef("treble");
+    trebleStave.setContext(ctx).draw();
+
+    const bassStave = new VF.Stave(10, y + 100, systemWidth);
+    bassStave.addClef("bass");
+    bassStave.setContext(ctx).draw();
+
+    try {
+      const brace = new VF.StaveConnector(trebleStave, bassStave);
+      brace.setType(VF.StaveConnector.type.BRACE);
+      brace.setContext(ctx).draw();
+      const line = new VF.StaveConnector(trebleStave, bassStave);
+      line.setType(VF.StaveConnector.type.SINGLE_LEFT);
+      line.setContext(ctx).draw();
+    } catch (e) { /* cosmetic only — skip the brace if this VexFlow build's API differs */ }
+
+    drawSystemVoice(trebleChords, trebleStave, "treble", startTick, endTick);
+    drawSystemVoice(bassChords, bassStave, "bass", startTick, endTick);
+  }
 }
 
+let lastAutoScrolledEl = null;
 function updateSheetHighlight(elapsed) {
+  let firstActive = null;
   sheetNoteElements.forEach(({ el, start, end }) => {
-    el.classList.toggle("vf-note-active", elapsed >= start && elapsed <= end);
+    const active = elapsed >= start && elapsed <= end;
+    el.classList.toggle("vf-note-active", active);
+    if (active && !firstActive) firstActive = el;
   });
+  // Follow along during playback in Sheet Music / Both view — only nudge the
+  // page when the active note has actually left the visible area, so it
+  // doesn't fight a manual scroll every animation frame.
+  if (playing && firstActive && firstActive !== lastAutoScrolledEl && (viewMode === "sheet" || viewMode === "both")) {
+    const rect = firstActive.getBoundingClientRect();
+    if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+      firstActive.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    lastAutoScrolledEl = firstActive;
+  }
 }
 </script>
 </body>
