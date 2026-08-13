@@ -236,6 +236,34 @@ def extract_audio_from_video(video_path: str, output_wav_path: str):
         raise HTTPException(500, f"Couldn't extract audio from video: {result.stderr[-500:]}")
 
 
+def denoise_audio(audio_path: str) -> str:
+    """
+    Runs a spectral-gating noise reduction pass over the audio and writes
+    the result next to the original as "<id>.denoised.wav". This cuts down
+    on the transcriber picking up room noise, hiss, or talking instead of
+    just the piano — it's not source separation (it won't remove another
+    instrument playing at the same time as the piano), just general
+    background noise suppression.
+    """
+    import librosa
+    import noisereduce as nr
+    import soundfile as sf
+
+    y, sr = librosa.load(audio_path, sr=None, mono=True)
+    # noisereduce's default "stationary" mode treats anything that doesn't
+    # fluctuate as noise — which includes a sustained, held piano note, and
+    # was gating those out entirely in testing (turning a clean recording
+    # into silence). stationary=False adapts over time instead of assuming
+    # one fixed noise profile, and prop_decrease=0.75 (vs. the 1.0 default)
+    # applies the reduction gently enough to leave clean recordings intact
+    # while still meaningfully cutting down noise-driven fragmentation.
+    denoised = nr.reduce_noise(y=y, sr=sr, stationary=False, prop_decrease=0.75)
+
+    denoised_path = os.path.splitext(audio_path)[0] + ".denoised.wav"
+    sf.write(denoised_path, denoised, sr)
+    return denoised_path
+
+
 def run_transcription(audio_path: str):
     """
     Runs Basic Pitch on the given audio file and returns a list of
@@ -250,15 +278,19 @@ def run_transcription(audio_path: str):
     from basic_pitch import ICASSP_2022_MODEL_PATH
     import librosa
 
-    model_output, midi_data, note_events = predict(
-        audio_path,
-        ICASSP_2022_MODEL_PATH,
-        onset_threshold=0.6,        # higher = fewer false-positive note starts
-        frame_threshold=0.35,       # higher = less bleed/smearing between notes
-        minimum_note_length=90,     # ms; drops very short spurious blips
-        minimum_frequency=27.5,     # A0, bottom of an 88-key piano
-        maximum_frequency=4186.0,   # C8, top of an 88-key piano
-    )
+    denoised_path = denoise_audio(audio_path)
+    try:
+        model_output, midi_data, note_events = predict(
+            denoised_path,
+            ICASSP_2022_MODEL_PATH,
+            onset_threshold=0.6,        # higher = fewer false-positive note starts
+            frame_threshold=0.35,       # higher = less bleed/smearing between notes
+            minimum_note_length=90,     # ms; drops very short spurious blips
+            minimum_frequency=27.5,     # A0, bottom of an 88-key piano
+            maximum_frequency=4186.0,   # C8, top of an 88-key piano
+        )
+    finally:
+        os.remove(denoised_path)
 
     notes = [
         NoteEvent(

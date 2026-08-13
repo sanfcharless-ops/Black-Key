@@ -329,7 +329,8 @@
     border-right: 1px solid rgba(0,0,0,0.35);
     border-radius: 0 0 5px 5px;
     box-shadow: inset 0 -6px 8px -4px rgba(0,0,0,0.25);
-    transition: background 0.08s ease, box-shadow 0.08s ease;
+    transform-origin: top center;
+    transition: background 0.04s ease, box-shadow 0.04s ease, transform 0.04s ease;
   }
   .black-key {
     position: absolute; top: 0; height: 62%;
@@ -337,14 +338,32 @@
     border-radius: 0 0 4px 4px;
     box-shadow: inset 0 -4px 6px -2px rgba(0,0,0,0.6), inset 0 2px 1px rgba(255,255,255,0.08);
     z-index: 2;
-    transition: background 0.08s ease, box-shadow 0.08s ease;
+    transform-origin: top center;
+    transition: background 0.04s ease, box-shadow 0.04s ease, transform 0.04s ease;
   }
-  .white-key.lit-left  { background: linear-gradient(180deg, #fff 0%, var(--hand-left) 100%);  box-shadow: 0 0 16px 2px var(--hand-left); }
-  .white-key.lit-right { background: linear-gradient(180deg, #fff 0%, var(--hand-right) 100%); box-shadow: 0 0 16px 2px var(--hand-right); }
-  .black-key.lit-left  { background: linear-gradient(180deg, var(--hand-left) 0%, #6b4a26 100%);  box-shadow: 0 0 14px 2px var(--hand-left); }
-  .black-key.lit-right { background: linear-gradient(180deg, var(--hand-right) 0%, #235c78 100%); box-shadow: 0 0 14px 2px var(--hand-right); }
+  /* Pressed like a real key: tips down slightly at the hinge and the
+     shadow tucks in underneath, instead of just glowing in place. */
+  .white-key.lit-left, .white-key.lit-right {
+    transform: perspective(60px) rotateX(6deg) translateY(2px);
+  }
+  .black-key.lit-left, .black-key.lit-right {
+    transform: perspective(40px) rotateX(8deg) translateY(2px);
+  }
+  .white-key.lit-left  { background: linear-gradient(180deg, #fff 0%, var(--hand-left) 100%);  box-shadow: inset 0 -3px 6px -2px rgba(0,0,0,0.35), 0 0 12px 1px var(--hand-left); }
+  .white-key.lit-right { background: linear-gradient(180deg, #fff 0%, var(--hand-right) 100%); box-shadow: inset 0 -3px 6px -2px rgba(0,0,0,0.35), 0 0 12px 1px var(--hand-right); }
+  .black-key.lit-left  { background: linear-gradient(180deg, var(--hand-left) 0%, #6b4a26 100%);  box-shadow: inset 0 -2px 4px -1px rgba(0,0,0,0.5), 0 0 10px 1px var(--hand-left); }
+  .black-key.lit-right { background: linear-gradient(180deg, var(--hand-right) 0%, #235c78 100%); box-shadow: inset 0 -2px 4px -1px rgba(0,0,0,0.5), 0 0 10px 1px var(--hand-right); }
 
   #status { color: var(--muted); font-size: 0.85rem; margin-top: 1rem; min-height: 1.2em; }
+
+  #pageFooter {
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--muted);
+    opacity: 0.5;
+    padding: 1.5rem 1rem 2rem;
+    letter-spacing: 0.02em;
+  }
 </style>
 </head>
 <body>
@@ -397,6 +416,7 @@
           <span id="transposeLabel">Transpose <b id="transposeVal">0</b></span>
           <button id="transposeUp" title="Transpose up a semitone">+</button>
         </div>
+        <button class="control" id="noteLangToggle" title="Switch note name language">Notes: EN</button>
       </div>
 
       <div id="bgRow">
@@ -423,6 +443,8 @@
     </div>
   </div>
 </div>
+
+<footer id="pageFooter">currently being build by santi figueredo charles</footer>
 
 <script>
 // Point this at your deployed backend.
@@ -485,9 +507,14 @@ tabLink.addEventListener("click", () => {
 
 const MIN_PITCH = 21, MAX_PITCH = 108;
 const MIDDLE_C = 60; // heuristic split point for left/right hand coloring
-const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const NOTE_NAMES_EN = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const NOTE_NAMES_ES = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"];
 const IS_BLACK = [false,true,false,true,false,false,true,false,true,false,true,false];
-function pitchName(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
+let noteLanguage = "en";
+function pitchName(midi) {
+  const names = noteLanguage === "es" ? NOTE_NAMES_ES : NOTE_NAMES_EN;
+  return names[midi % 12] + (Math.floor(midi / 12) - 1);
+}
 function fmtTime(s) {
   if (!isFinite(s)) return "0:00";
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
@@ -640,24 +667,47 @@ function renderNotes() {
   const laneWidth = stageWidth / laneCount;
 
   notes.forEach((n) => {
-    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const hand = handFor(n.pitch);
     const x = (n.pitch - MIN_PITCH) * laneWidth;
     const h = Math.max(4, n.duration * pxPerSecond);
+    const y0 = -(h + n.start_time * pxPerSecond);
+
+    group.setAttribute("data-y0", y0);
+    group.setAttribute("data-pitch", n.pitch);
+    group.setAttribute("data-hand", hand);
+    group.setAttribute("data-start", n.start_time);
+    group.setAttribute("data-end", n.start_time + n.duration);
+    group.setAttribute("transform", `translate(0, ${y0})`);
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     rect.setAttribute("x", x + 1.5);
+    rect.setAttribute("y", 0);
     rect.setAttribute("width", Math.max(2, laneWidth - 3));
     rect.setAttribute("height", h);
     rect.setAttribute("rx", 6);
     rect.setAttribute("fill", `url(#glass${hand === "right" ? "Right" : "Left"})`);
     rect.setAttribute("stroke", "rgba(255,255,255,0.4)");
     rect.setAttribute("stroke-width", "1");
-    rect.setAttribute("data-y0", -(h + n.start_time * pxPerSecond));
-    rect.setAttribute("data-pitch", n.pitch);
-    rect.setAttribute("data-hand", hand);
-    rect.setAttribute("data-start", n.start_time);
-    rect.setAttribute("data-end", n.start_time + n.duration);
-    rect.setAttribute("y", rect.getAttribute("data-y0"));
-    lanes.appendChild(rect);
+    group.appendChild(rect);
+
+    // Note name label, rotated to fit the narrow lane, centered in the note.
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    const labelX = x + laneWidth / 2;
+    const labelY = h / 2;
+    label.setAttribute("x", labelX);
+    label.setAttribute("y", labelY);
+    label.setAttribute("transform", `rotate(-90, ${labelX}, ${labelY})`);
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("dominant-baseline", "middle");
+    label.setAttribute("font-size", "6.5");
+    label.setAttribute("font-family", "-apple-system, sans-serif");
+    label.setAttribute("fill", "rgba(10,8,6,0.75)");
+    label.setAttribute("pointer-events", "none");
+    label.textContent = pitchName(n.pitch);
+    group.appendChild(label);
+
+    lanes.appendChild(group);
   });
 
   renderKeyboard();
@@ -778,6 +828,14 @@ function setTranspose(v) {
   if (rawNotes.length) renderNotes();
 }
 
+// ---------- Note name language (English letters vs. Spanish solfège) ----------
+const noteLangToggle = document.getElementById("noteLangToggle");
+noteLangToggle.addEventListener("click", () => {
+  noteLanguage = noteLanguage === "en" ? "es" : "en";
+  noteLangToggle.textContent = noteLanguage === "es" ? "Notes: ES" : "Notes: EN";
+  if (rawNotes.length) renderNotes();
+});
+
 // ---------- Custom background image ----------
 const stageBg = document.getElementById("stageBg");
 const bgInput = document.getElementById("bgInput");
@@ -811,18 +869,18 @@ bgClear.addEventListener("click", () => {
 function positionNotesAt(elapsed) {
   const stageHeight = 320;
   const pxPerSecond = 90;
-  document.querySelectorAll("#lanes rect").forEach((rect) => {
-    const y0 = parseFloat(rect.getAttribute("data-y0"));
-    rect.setAttribute("y", y0 + elapsed * pxPerSecond + stageHeight);
+  document.querySelectorAll("#lanes g").forEach((group) => {
+    const y0 = parseFloat(group.getAttribute("data-y0"));
+    group.setAttribute("transform", `translate(0, ${y0 + elapsed * pxPerSecond + stageHeight})`);
   });
   document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit-left", "lit-right"));
-  document.querySelectorAll("#lanes rect").forEach((rect) => {
-    const start = parseFloat(rect.getAttribute("data-start"));
-    const end = parseFloat(rect.getAttribute("data-end"));
+  document.querySelectorAll("#lanes g").forEach((group) => {
+    const start = parseFloat(group.getAttribute("data-start"));
+    const end = parseFloat(group.getAttribute("data-end"));
     if (elapsed >= start && elapsed <= end) {
-      const pitch = rect.getAttribute("data-pitch");
-      const hand = rect.getAttribute("data-hand");
-      const keyEl = document.querySelector(`[data-pitch="${pitch}"]`);
+      const pitch = group.getAttribute("data-pitch");
+      const hand = group.getAttribute("data-hand");
+      const keyEl = document.querySelector(`#keyboard [data-pitch="${pitch}"]`);
       if (keyEl) keyEl.classList.add(hand === "right" ? "lit-right" : "lit-left");
     }
   });
