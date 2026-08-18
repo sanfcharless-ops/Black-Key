@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js"></script>
 <style>
   :root {
     --bg: #050403;
@@ -888,7 +889,7 @@
       </div>
 
       <div id="resultsRoom">
-      <video id="videoPreview" playsinline></video>
+      <video id="videoPreview" playsinline crossorigin="anonymous"></video>
 
       <div id="controls">
         <button class="control primary" id="playBtn">Play</button>
@@ -957,7 +958,7 @@
 
       <div id="status"></div>
       </div>
-      <audio id="player" style="display:none"></audio>
+      <audio id="player" style="display:none" crossorigin="anonymous"></audio>
     </div>
   </div>
 </div>
@@ -1389,6 +1390,7 @@ function resetStage() {
   document.getElementById("rotatePrompt").style.display = "none";
   transposeSemitones = 0;
   transposeVal.textContent = "0";
+  if (pitchShiftNode) pitchShiftNode.pitch = 0;
   clearLoop();
   loadedProjectMode = false;
   playBtn.disabled = false;
@@ -1583,13 +1585,32 @@ function renderKeyboard() {
 // Playback is driven entirely by the active element's own clock, so
 // pausing and resuming naturally stays where you left off, and video
 // files stay in sync with the falling notes the same way audio does.
-playBtn.addEventListener("click", () => {
+playBtn.addEventListener("click", async () => {
   if (playing) {
     activePlayer.pause();
   } else {
+    await routeThroughPitchShift(activePlayer);
     activePlayer.play();
   }
 });
+
+// ---------- Real-time pitch shifting (Tone.js) ----------
+// player and videoPreview are persistent elements reused across uploads, and
+// createMediaElementSource() can only ever be called once per element, so each
+// one is routed through the shared PitchShift node the first time it plays.
+let pitchShiftNode = null;
+const pitchShiftedElements = new WeakSet();
+async function routeThroughPitchShift(el) {
+  if (Tone.context.state !== "running") await Tone.start();
+  if (!pitchShiftNode) {
+    pitchShiftNode = new Tone.PitchShift({ pitch: transposeSemitones }).toDestination();
+  }
+  if (!pitchShiftedElements.has(el)) {
+    const source = Tone.context.createMediaElementSource(el);
+    Tone.connect(source, pitchShiftNode);
+    pitchShiftedElements.add(el);
+  }
+}
 
 function bindPlayerOnce(el) {
   if (el.dataset.bound) return;
@@ -1650,13 +1671,14 @@ speedSelect.addEventListener("change", () => {
   activePlayer.playbackRate = parseFloat(speedSelect.value);
 });
 
-// ---------- Transpose (visual only — shifts notes & keyboard, not audio pitch) ----------
+// ---------- Transpose (shifts notes, keyboard, and the actual audio pitch) ----------
 const transposeVal = document.getElementById("transposeVal");
 document.getElementById("transposeUp").addEventListener("click", () => setTranspose(transposeSemitones + 1));
 document.getElementById("transposeDown").addEventListener("click", () => setTranspose(transposeSemitones - 1));
 function setTranspose(v) {
   transposeSemitones = Math.max(-12, Math.min(12, v));
   transposeVal.textContent = (transposeSemitones > 0 ? "+" : "") + transposeSemitones;
+  if (pitchShiftNode) pitchShiftNode.pitch = transposeSemitones;
   if (rawNotes.length) { renderNotes(); renderSheetMusic(); }
 }
 
