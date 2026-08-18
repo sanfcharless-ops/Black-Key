@@ -786,7 +786,7 @@
 
 <div id="landing">
   <h1>keydrops</h1>
-  <p>Upload a piano recording — or paste a TikTok or YouTube link — and watch it fall into place, note by note, played back exactly as you recorded it.</p>
+  <p>Upload a piano recording, paste a TikTok or YouTube link, or record live, and watch it fall into place, note by note, played back exactly as you recorded it.</p>
   <button class="cta" id="getStarted">Get started</button>
   <div class="scroll-hint" id="scrollHint" title="Scroll for more">
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 8l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -796,8 +796,8 @@
 <section class="reveal-section" id="revealWhy">
   <span class="section-eyebrow">Why keydrops</span>
   <h2>Nobody ever replies with the tutorial.</h2>
-  <p>You've seen it a hundred times — someone posts an incredible cover, and the replies are all "tutorial please?" and
-     "how do you do this??" with nothing ever coming of it. keydrops skips the waiting entirely: paste the link, and
+  <p>You've seen it a hundred times: someone posts an incredible cover, and the replies are all "tutorial please?" and
+     "how do you do this??" with nothing ever coming of it. keydrops skips the waiting entirely. Paste the link, and
      it shows you the notes itself.</p>
   <div class="reveal-chips">
     <span class="reveal-chip">Upload a file, paste a link, or play live</span>
@@ -810,7 +810,7 @@
   <span class="section-eyebrow">Heads up</span>
   <h2>Recording live? Still finding its footing.</h2>
   <p>Uploading a file or pasting a link usually means clean, already-recorded audio. A live mic in your room picks up
-     everything else too — so for now, expect the most accurate results from a file or link, with live recording as
+     everything else too, so for now, expect the most accurate results from a file or link, with live recording as
      the more experimental option while we keep tuning it.</p>
   <button class="cta" id="getStartedFromBeta">Get started</button>
 </section>
@@ -854,7 +854,7 @@
         <div class="upload-zone" id="dropZone">
           <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.mp4,.mov,.m4v,.webm" />
           <div>Click to choose a file, or drag one here</div>
-          <div class="hint">MP3, WAV, M4A, MP4, MOV — up to 60MB</div>
+          <div class="hint">MP3, WAV, M4A, MP4, MOV (up to 60MB)</div>
         </div>
       </div>
 
@@ -881,7 +881,7 @@
         </div>
         <div class="beta-callout">
           <strong>Recording live is still experimental.</strong> Room noise and mic placement make it noticeably less
-          accurate than uploading a file or pasting a link — those tend to already be cleanly recorded, while a live
+          accurate than uploading a file or pasting a link. Those tend to already be cleanly recorded, while a live
           mic picks up everything around it too. Try it, but expect more mistakes here than the other two options
           while we keep improving it.
         </div>
@@ -950,7 +950,7 @@
       <div id="keyboard"></div>
 
       <div id="sheetMusicWrap">
-        <div id="sheetMusicHint">Sheet music is approximate — rhythm is quantized from an estimated tempo, not a
+        <div id="sheetMusicHint">Sheet music is approximate. Rhythm is quantized from an estimated tempo, not a
           precise transcription, and hand assignment uses the same guess as the falling notes.</div>
         <div id="sheetMusicContainer"></div>
       </div>
@@ -970,7 +970,7 @@
       <h3>My Projects</h3>
       <button id="projectsModalClose" title="Close">&times;</button>
     </div>
-    <p id="projectsModalHint">Saved on this device only — not synced to an account yet.</p>
+    <p id="projectsModalHint">Saved on this device only, not synced to an account yet.</p>
     <div id="projectsList"></div>
   </div>
 </div>
@@ -1033,7 +1033,7 @@ document.addEventListener("click", (e) => {
 });
 document.getElementById("menuProItem").addEventListener("click", () => {
   setMenuOpen(false);
-  alert("Pro is coming soon — it'll unlock things like 60-second recordings. Not wired up to real payment yet.");
+  alert("Pro is coming soon. It'll unlock things like 60-second recordings. Not wired up to real payment yet.");
 });
 document.getElementById("menuAboutItem").addEventListener("click", () => {
   setMenuOpen(false);
@@ -1248,7 +1248,7 @@ durationGroup.querySelectorAll(".duration-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const seconds = parseInt(btn.dataset.seconds, 10);
     if (btn.classList.contains("pro") && !PRO_UNLOCKED) {
-      recordHintEl.textContent = "60-second recordings are a Pro feature — upgrade to unlock.";
+      recordHintEl.textContent = "60-second recordings are a Pro feature. Upgrade to unlock.";
       return;
     }
     if (mediaRecorder && mediaRecorder.state === "recording") return; // don't swap limits mid-recording
@@ -1284,7 +1284,7 @@ async function startRecording() {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    recordHintEl.textContent = "Microphone access was denied — allow it in your browser settings to record.";
+    recordHintEl.textContent = "Microphone access was denied. Allow it in your browser settings to record.";
     return;
   }
 
@@ -1847,14 +1847,14 @@ function saveProjectsList(list) {
     localStorage.setItem(PROJECTS_KEY, JSON.stringify(list));
     return true;
   } catch (e) {
-    alert("Couldn't save — your browser's local storage is full or unavailable. Try deleting an older project first.");
+    alert("Couldn't save. Your browser's local storage is full or unavailable. Try deleting an older project first.");
     return false;
   }
 }
 
 document.getElementById("saveProjectBtn").addEventListener("click", () => {
   if (!rawNotes.length) return;
-  const defaultName = `Recording — ${new Date().toLocaleDateString()}`;
+  const defaultName = `Recording (${new Date().toLocaleDateString()})`;
   const name = prompt("Name this project:", defaultName);
   if (name === null) return; // cancelled
   const projects = loadProjectsList();
@@ -1945,7 +1945,7 @@ function loadSavedProject(p) {
   controls.style.display = "flex";
   document.getElementById("viewModeGroup").style.display = "flex";
   document.querySelector('.view-mode-btn[data-mode="sheet"]').click();
-  statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes — this is the transcription only, the original audio wasn't saved, so playback and the seekbar aren't available here.`;
+  statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes. This is the transcription only. The original audio wasn't saved, so playback and the seekbar aren't available here.`;
   playBtn.disabled = true;
   seekRow.style.display = "none";
   enterResultsRoom();
