@@ -44,6 +44,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+# Loaded once at process startup rather than per-request — predict() accepts
+# either a model path (which it loads fresh from disk every call) or an
+# already-instantiated Model to reuse. Reloading the model on every single
+# transcription was spiking memory on each request instead of paying that
+# cost once, which is what was tripping Railway's memory limit.
+from basic_pitch.inference import Model
+from basic_pitch import ICASSP_2022_MODEL_PATH
+
+_basic_pitch_model = Model(ICASSP_2022_MODEL_PATH)
+
 app = FastAPI(title="Piano Transcription API")
 
 app.add_middleware(
@@ -302,14 +312,13 @@ def run_transcription(audio_path: str):
     floor, and nothing else seemed to regress from lowering it.
     """
     from basic_pitch.inference import predict
-    from basic_pitch import ICASSP_2022_MODEL_PATH
     import librosa
 
     denoised_path = denoise_audio(audio_path)
     try:
         model_output, midi_data, note_events = predict(
             denoised_path,
-            ICASSP_2022_MODEL_PATH,
+            _basic_pitch_model,
             onset_threshold=0.6,        # higher = fewer false-positive note starts
             frame_threshold=0.35,       # higher = less bleed/smearing between notes
             minimum_note_length=50,     # ms; drops very short spurious blips
