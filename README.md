@@ -5,14 +5,7 @@ Two pieces:
 - **backend/**: a Python API that takes an uploaded audio/video file (or a TikTok/YouTube link) and returns the detected piano notes, using Basic Pitch (open-source, MIT-licensed, free to run).
 - **frontend/**: a single HTML page that uploads a file (or a TikTok/YouTube link), calls the backend, and renders the falling-notes player.
 
-## Getting it live (no coding required, just following steps)
-
-### 1. Backend: deploy to Railway
-1. Create a free account at railway.app.
-2. Create a new project, choose "Deploy from GitHub repo," and set the service's **Root Directory** to `backend`.
-3. Railway detects the `Dockerfile` in `backend/` and builds from that. It installs Python, ffmpeg, and everything in `requirements.txt` automatically. (We moved off Railway's auto-detected Nixpacks build because it wasn't reliably including ffmpeg in the final image.)
-4. Once deployed, Railway gives you a public URL like `https://your-app.up.railway.app`. That's your API.
-5. Test it by visiting `https://your-app.up.railway.app/health`. You should see `{"status": "ok"}`.
+###1. Start of the project
 
 ### 2. Frontend: deploy to Vercel or Netlify
 1. Open `frontend/index.html` and change the line near the top of the script:
@@ -23,7 +16,7 @@ Two pieces:
 2. Drag the `frontend/` folder into vercel.com or netlify.com's dashboard (both have a "drag and drop to deploy" option, no command line needed).
 3. You'll get a live URL you can share with anyone.
 
-### 3. Try it
+### Try
 Upload a short piano recording (30 seconds to a couple minutes is a good first test) and watch it transcribe.
 
 ## What's not built yet
