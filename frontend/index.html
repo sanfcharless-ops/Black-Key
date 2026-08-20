@@ -135,10 +135,15 @@
     text-align: center;
     padding: 4rem 2rem;
     position: relative;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border-top: 1px solid var(--border);
+  }
+  .reveal-section::before {
+    content: "";
+    position: absolute; inset: 0;
+    /* Borderless — same soft dark vignette as the landing hero (no z-index:
+       matching that exact working setup instead of a new one), instead of
+       a bordered glass panel, so the section blends into the shader too. */
+    background: radial-gradient(ellipse 48% 42% at 50% 50%, rgba(0,0,0,0.85), rgba(0,0,0,0.5) 60%, transparent 85%);
+    pointer-events: none;
   }
   .reveal-section .section-eyebrow {
     font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
@@ -171,7 +176,6 @@
     font-size: 0.82rem;
     color: var(--text);
   }
-  .beta-section { background: rgba(10,20,25,0.45); }
 
   .feature-grid {
     display: grid;
@@ -1133,7 +1137,9 @@
 </div>
 
 <script>
-// ---------- Animated WebGL background ("Flow field" shader) ----------
+// ---------- Animated WebGL background ("Pulsing Border" shader) ----------
+// Adapted from Paper Shaders (https://shaders.paper.design/pulsing-border),
+// licensed Apache-2.0: https://github.com/paper-design/shaders
 // Self-contained and defensive on purpose: nothing here should ever be able
 // to break transcription/playback, so any failure just falls back to the
 // flat --bg color underneath.
@@ -1149,10 +1155,13 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }`;
 
-  // "Flow field" — made with the 21st.dev Shader Builder. Uniform layout and
-  // parameter values below are exactly what the builder exported; see the
-  // in-shader comments for what each packed component means.
+  // "Pulsing Border" — made with the 21st.dev Shader Builder. Uniform layout
+  // and parameter values below are exactly what the builder exported; see
+  // the in-shader comments for what each packed component means.
   const fragmentSrc = `
+// "Pulsing Border" — made with the 21st.dev Shader Builder
+// Adapted from Paper Shaders: https://shaders.paper.design/pulsing-border
+// Licensed under Apache-2.0: https://github.com/paper-design/shaders
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -1317,10 +1326,16 @@ vec3 hueRotate(vec3 col, float a) {
 }
 
 vec3 shade(vec2 uv, vec2 p, float t) {
-  float a = fbm(p * 2.0 + u_seed) * 6.2831;
-  vec2 dir = vec2(cos(a), sin(a));
-  float v = fbm(p * 3.0 + dir * (u_intensity * 2.0) + t * 0.12);
-  return palette(v);
+  vec2 box = vec2(0.82, 0.47);
+  vec2 d = abs(p) - box;
+  float outside = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+  float thickness = mix(0.018, 0.11, u_paramA);
+  float edge = 1.0 - smoothstep(thickness * 0.35, thickness, abs(outside));
+  float perimeter = atan(p.y * box.x, p.x * box.y) / 6.2831853 + 0.5;
+  float pulse = 0.5 + 0.5 * sin(perimeter * (5.0 + u_intensity * 9.0) - t * 1.8);
+  float trail = pow(pulse, mix(7.0, 2.0, u_intensity));
+  float innerGlow = exp(-abs(outside) * 24.0) * 0.32;
+  return mix(u_colors[0], palette(trail), clamp(edge + innerGlow, 0.0, 1.0));
 }
 
 void main() {
@@ -1457,14 +1472,14 @@ void main() {
   const u_space = gl.getUniformLocation(program, "u_space");
   const u_cursor = gl.getUniformLocation(program, "u_cursor");
 
-  // Low → high stops (sRGB, 0..1): #03120E, #0E7C5A, #7CE577, #F4FFC7.
+  // Low → high stops (sRGB, 0..1): #101010, #F5F5F5, #B0B0B0, #3A3A3A.
   // Only 4 of the 8 array slots are used (u_scene.w = colorCount = 4); the
   // rest are left at GLSL's default zero-init since the shader never reads them.
   gl.uniform3fv(u_colors, new Float32Array([
-    0.012, 0.071, 0.055,
-    0.055, 0.486, 0.353,
-    0.486, 0.898, 0.467,
-    0.957, 1.000, 0.780,
+    0.063, 0.063, 0.063,
+    0.961, 0.961, 0.961,
+    0.690, 0.690, 0.690,
+    0.227, 0.227, 0.227,
   ]));
 
   // Pointer state for the swirl-cursor effect, normalized -1..1 in canvas
@@ -1503,11 +1518,11 @@ void main() {
     const t = (now - startTime) / 1000;
     pointerActive += (targetPointerActive - pointerActive) * 0.08;
 
-    gl.uniform4f(u_scene, canvas.width, canvas.height, t * -0.39, 4.0);
-    gl.uniform4f(u_shape, 1.74, 0.89, 0.27, 0.08);
-    gl.uniform4f(u_surface, 2.72, 0.94, 0.04, 1.40);
-    gl.uniform4f(u_finish, 5.43, 0.46, 0.000, 0.00);
-    gl.uniform4f(u_transform, 9279.0, 5.99, 0.20, 1.0);
+    gl.uniform4f(u_scene, canvas.width, canvas.height, t * -1.07, 4.0);
+    gl.uniform4f(u_shape, 1.70, 0.69, 0.74, 0.30);
+    gl.uniform4f(u_surface, 3.68, 0.94, 0.04, 1.40);
+    gl.uniform4f(u_finish, 5.43, 0.46, 0.000, 0.06);
+    gl.uniform4f(u_transform, 8280.0, 1.29, 0.20, 1.0);
     gl.uniform4f(u_space, -0.19, 0.02, pointerX, pointerY);
     gl.uniform4f(u_cursor, pointerActive, 2.0, 0.01, 0.45);
 
