@@ -1593,7 +1593,66 @@ function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
-function handFor(pitch) { return pitch >= MIDDLE_C ? "right" : "left"; }
+// ---------- Hand assignment (left/right) ----------
+// A fixed middle-C split falls apart the moment either hand crosses it — a
+// left-hand arpeggio reaching up, a right-hand note dipping low — which is
+// extremely common in real playing. Instead, track each hand as its own
+// voice: every note goes to whichever hand's most recent notes it's
+// pitch-closest to, so a hand can wander past middle C and still get
+// tracked correctly. This is the same idea behind automatic voice
+// separation in transcription software — no ML model, just proximity.
+const ONSET_GROUP_EPSILON = 0.05;   // seconds — notes this close together are one chord
+const HAND_STALE_SECONDS = 2.5;     // a silent hand's tracked position goes stale after this long
+
+function assignHands(notes) {
+  if (!notes.length) return notes;
+  const sorted = [...notes].sort((a, b) => a.start_time - b.start_time);
+
+  // Start each hand's tracker from where this piece actually lives, not a
+  // fixed constant — a piece played entirely in the upper register shouldn't
+  // have its lower notes forced into "left hand". This has to be based on
+  // the pitch *range* (min/max), not a percentile over note occurrences —
+  // a held or repeated chord in one hand otherwise dominates the note count
+  // and drags the other hand's default starting point toward it.
+  let minPitch = Infinity, maxPitch = -Infinity;
+  for (const n of sorted) {
+    if (n.pitch < minPitch) minPitch = n.pitch;
+    if (n.pitch > maxPitch) maxPitch = n.pitch;
+  }
+  const range = maxPitch - minPitch;
+  const DEFAULT_LEFT = minPitch + range * 0.25;
+  const DEFAULT_RIGHT = minPitch + range * 0.75;
+
+  let leftPos = DEFAULT_LEFT, rightPos = DEFAULT_RIGHT;
+  let lastLeftTime = -Infinity, lastRightTime = -Infinity;
+
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i + 1;
+    while (j < sorted.length && sorted[j].start_time - sorted[i].start_time <= ONSET_GROUP_EPSILON) j++;
+    const group = sorted.slice(i, j);
+    const t = sorted[i].start_time;
+
+    if (t - lastLeftTime > HAND_STALE_SECONDS) leftPos = DEFAULT_LEFT;
+    if (t - lastRightTime > HAND_STALE_SECONDS) rightPos = DEFAULT_RIGHT;
+
+    let leftSum = 0, leftCount = 0, rightSum = 0, rightCount = 0;
+    for (const n of group) {
+      const distLeft = Math.abs(n.pitch - leftPos);
+      const distRight = Math.abs(n.pitch - rightPos);
+      const hand = distLeft === distRight ? (n.pitch < MIDDLE_C ? "left" : "right")
+        : distLeft < distRight ? "left" : "right";
+      n.hand = hand;
+      if (hand === "left") { leftSum += n.pitch; leftCount++; }
+      else { rightSum += n.pitch; rightCount++; }
+    }
+    if (leftCount) { leftPos = leftSum / leftCount; lastLeftTime = t; }
+    if (rightCount) { rightPos = rightSum / rightCount; lastRightTime = t; }
+
+    i = j;
+  }
+  return notes; // same array/order — note objects were mutated in place
+}
 
 const videoPreview = document.getElementById("videoPreview");
 const seekRow = document.getElementById("seekRow");
@@ -1913,7 +1972,7 @@ newTranscriptionBtn.addEventListener("click", () => {
 let tempoBpm = 120;
 
 function onTranscribed(data) {
-  rawNotes = data.notes;
+  rawNotes = assignHands(data.notes);
   tempoBpm = data.tempo_bpm || 120;
   const usesNote = data.uses_remaining === null || data.uses_remaining === undefined
     ? ""
@@ -1993,7 +2052,7 @@ function renderNotes() {
 
   notes.forEach((n) => {
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const hand = handFor(n.pitch);
+    const hand = n.hand;
     const x = (n.pitch - MIN_PITCH) * laneWidth;
     const h = Math.max(4, n.duration * pxPerSecond);
     const y0 = -(h + n.start_time * pxPerSecond);
@@ -2448,7 +2507,7 @@ function loadSavedProject(p) {
   window.scrollTo(0, 0);
 
   loadedProjectMode = true;
-  rawNotes = p.notes;
+  rawNotes = assignHands(p.notes);
   tempoBpm = p.tempoBpm || 120;
   resetStage();
   renderNotes();
@@ -2536,8 +2595,8 @@ function renderSheetMusic() {
     return [...byTick.entries()].sort((a, b) => a[0] - b[0]).map(([tick, group]) => ({ tick, group }));
   }
 
-  const trebleChords = buildChords(notes.filter((n) => handFor(n.pitch) === "right"));
-  const bassChords = buildChords(notes.filter((n) => handFor(n.pitch) === "left"));
+  const trebleChords = buildChords(notes.filter((n) => n.hand === "right"));
+  const bassChords = buildChords(notes.filter((n) => n.hand === "left"));
   if (!trebleChords.length && !bassChords.length) return;
 
   function makeStaveNote(group, tick, nextTick, clef) {
