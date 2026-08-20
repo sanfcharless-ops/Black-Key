@@ -22,6 +22,12 @@
     --hand-left: #d9a05b;   /* warm amber — left hand */
     --hand-right: #5cb8e4;  /* cool glass blue — right hand */
     --glass-hi: rgba(255,255,255,0.55);
+    /* Dark-tinted glass (not a white frost): darkens whatever's behind it so
+       light text stays readable over the shader no matter how light or dark
+       that patch of it currently is. */
+    --glass-bg: rgba(5,4,3,0.4);
+    --glass-bg-hover: rgba(5,4,3,0.55);
+    --glass-blur: blur(14px);
   }
   * { box-sizing: border-box; }
   html {
@@ -60,7 +66,11 @@
   #landing::before {
     content: "";
     position: absolute; inset: 0;
+    /* The dark vignette keeps the title/subtitle readable no matter what
+       color the shader is doing behind them at any given moment; the two
+       tinted glows underneath are the original subtle accent. */
     background:
+      radial-gradient(ellipse 48% 38% at 50% 50%, rgba(0,0,0,0.9), rgba(0,0,0,0.55) 60%, transparent 85%),
       radial-gradient(ellipse 60% 40% at 30% 20%, rgba(92,184,228,0.10), transparent 60%),
       radial-gradient(ellipse 60% 40% at 75% 75%, rgba(217,160,91,0.10), transparent 60%);
     pointer-events: none;
@@ -87,6 +97,7 @@
     margin: 0 0 2.5rem;
     line-height: 1.6;
     position: relative;
+    text-shadow: 0 2px 14px rgba(0,0,0,0.75), 0 1px 3px rgba(0,0,0,0.6);
   }
   .cta {
     background: var(--accent);
@@ -218,11 +229,24 @@
     background: linear-gradient(90deg, #fff, var(--hand-right));
     -webkit-background-clip: text; background-clip: text; color: transparent;
     display: inline-block;
-    filter: drop-shadow(0 1px 10px rgba(0,0,0,0.55));
+    filter: drop-shadow(0 0 8px rgba(0,0,0,0.8)) drop-shadow(0 1px 3px rgba(0,0,0,0.8));
   }
-  .app-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 2rem; }
+  .app-sub {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 2rem;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9), 0 0 16px rgba(0,0,0,0.75), 0 1px 2px rgba(0,0,0,0.9);
+  }
 
   .app-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .app-title-wrap {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: 12px;
+    padding: 0.6rem 0.9rem;
+    margin: -0.6rem 0 0 -0.9rem;
+  }
   .menu-wrap { position: relative; flex-shrink: 0; }
   .menu-btn {
     width: 38px; height: 38px;
@@ -315,7 +339,9 @@
   .project-item-actions .delete-btn:hover { border-color: #e74c3c; color: #e74c3c; }
 
   .card {
-    background: var(--panel);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 1.75rem;
@@ -325,7 +351,9 @@
     display: none;
     align-items: center;
     gap: 0.4rem;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border);
     border-radius: 10px;
     color: var(--text);
@@ -337,7 +365,7 @@
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
   }
-  #newTranscriptionBtn:hover { border-color: var(--accent-dim); background: rgba(255,255,255,0.04); }
+  #newTranscriptionBtn:hover { border-color: var(--accent-dim); background: var(--glass-bg-hover); }
   #newTranscriptionBtn.visible { display: inline-flex; }
 
   #resultsRoom {
@@ -352,7 +380,9 @@
     display: flex;
     gap: 0.4rem;
     margin-bottom: 1rem;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-radius: 10px;
     padding: 0.3rem;
   }
@@ -375,7 +405,9 @@
     display: none;
     gap: 0.4rem;
     margin-bottom: 0.75rem;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-radius: 10px;
     padding: 0.3rem;
   }
@@ -423,7 +455,9 @@
   #linkPane .link-row { display: flex; gap: 0.6rem; }
   #tiktokUrl {
     flex: 1;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 10px;
@@ -445,7 +479,9 @@
     display: inline-flex;
     gap: 0.4rem;
     margin-bottom: 1.75rem;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-radius: 10px;
     padding: 0.3rem;
   }
@@ -524,7 +560,9 @@
   .record-btn {
     width: 64px; height: 64px;
     border-radius: 50%;
-    background: var(--panel-2);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 2px solid var(--border);
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer;
@@ -565,7 +603,7 @@
     -webkit-appearance: none;
     height: 5px;
     border-radius: 999px;
-    background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--panel-2) 0%, var(--panel-2) 100%);
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.12) 100%);
     outline: none;
     transition: box-shadow 0.15s ease;
   }
@@ -605,9 +643,9 @@
   }
 
   button.control {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -616,7 +654,7 @@
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
   }
-  button.control:hover { border-color: var(--accent-dim); background: rgba(255,255,255,0.1); }
+  button.control:hover { border-color: var(--accent-dim); background: var(--glass-bg-hover); }
   button.control.primary { background: var(--accent); color: #12100d; border-color: var(--accent); font-weight: 600; }
   button.control.primary:hover { background: #bf9066; }
   button.control:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -629,9 +667,9 @@
     flex-wrap: wrap;
   }
   select.control {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -644,9 +682,9 @@
     display: flex;
     align-items: center;
     gap: 0;
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
@@ -676,9 +714,9 @@
     display: flex;
     align-items: center;
     gap: 0;
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
@@ -851,7 +889,7 @@
 <div id="app">
   <div class="container">
     <div class="app-header">
-      <div>
+      <div class="app-title-wrap">
         <p class="app-title">keydrops</p>
         <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, or record live to transcribe it</p>
       </div>
@@ -2071,7 +2109,7 @@ function bindPlayerEvents(el) {
 
 function updateSeekFill() {
   const pct = seekbar.max > 0 ? (seekbar.value / seekbar.max) * 100 : 0;
-  seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--panel-2) ${pct}%)`;
+  seekbar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.12) ${pct}%)`;
 }
 
 seekbar.addEventListener("mousedown", () => { seeking = true; seekbar.classList.add("dragging"); updateSeekFill(); });
