@@ -172,6 +172,49 @@
     color: var(--text);
   }
   .beta-section { background: rgba(10,20,25,0.45); }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    max-width: 64rem;
+    width: 100%;
+    margin-top: 1rem;
+    text-align: left;
+  }
+  .feature-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.4rem;
+  }
+  .feature-eyebrow {
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.6rem;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+  }
+  .feature-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    color: var(--text);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+  }
+  .feature-card p {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: none;
+    margin: 0;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.7);
+  }
   .beta-section .section-eyebrow { color: var(--hand-right); }
   .reveal-section, .reveal-section * {
     opacity: 0;
@@ -882,6 +925,43 @@
   </div>
 </section>
 
+<section class="reveal-section" id="revealFeatures">
+  <span class="section-eyebrow">What's inside</span>
+  <h2>Everything the notes need to make sense.</h2>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-eyebrow">AI Transcription</span>
+      <h3>Every note, lifted from the recording.</h3>
+      <p>Powered by Basic Pitch, an open piano-transcription model, listening for pitch, timing, and how hard each note was played.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Hand Separation</span>
+      <h3>Left and right, tracked as you play.</h3>
+      <p>Each hand is followed as its own voice through the piece, so a hand crossing into the other's range doesn't get miscolored.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Real Audio Transpose</span>
+      <h3>Shift the key, hear it shift too.</h3>
+      <p>Move a song up or down and the audio actually changes pitch along with the falling notes, not just the visuals.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Sheet Music</span>
+      <h3>Every transcription, also notation.</h3>
+      <p>The same performance rendered as readable sheet music, no separate step or upload required.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Practice Mode</span>
+      <h3>Loop the hard part until it's not.</h3>
+      <p>Mark a section with A/B points and repeat just that passage, at whatever speed you need.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Take It Anywhere</span>
+      <h3>Export to MIDI.</h3>
+      <p>Bring the transcription into any DAW or notation program to keep working on it.</p>
+    </div>
+  </div>
+</section>
+
 <section class="reveal-section beta-section" id="revealBeta">
   <span class="section-eyebrow">Heads up</span>
   <h2>Recording live? Still finding its footing.</h2>
@@ -1467,10 +1547,12 @@ const CLIENT_ID = getClientId();
 const landing = document.getElementById("landing");
 const app = document.getElementById("app");
 const revealWhy = document.getElementById("revealWhy");
+const revealFeatures = document.getElementById("revealFeatures");
 const revealBeta = document.getElementById("revealBeta");
 function enterApp() {
   landing.classList.add("hidden");
   revealWhy.style.display = "none";
+  revealFeatures.style.display = "none";
   revealBeta.style.display = "none";
   app.classList.add("visible");
   window.scrollTo(0, 0);
@@ -1479,6 +1561,7 @@ function exitApp() {
   app.classList.remove("visible");
   landing.classList.remove("hidden");
   revealWhy.style.display = "";
+  revealFeatures.style.display = "";
   revealBeta.style.display = "";
   window.scrollTo(0, 0);
 }
@@ -1506,7 +1589,7 @@ const revealObserver = new IntersectionObserver((entries) => {
     if (entry.isIntersecting) entry.target.classList.add("in-view");
   });
 }, { threshold: 0.25 });
-[revealWhy, revealBeta].forEach((el) => revealObserver.observe(el));
+[revealWhy, revealFeatures, revealBeta].forEach((el) => revealObserver.observe(el));
 
 // ---------- Top-right menu ----------
 const menuBtn = document.getElementById("menuBtn");
@@ -2502,6 +2585,7 @@ function loadSavedProject(p) {
   projectsModalOverlay.classList.remove("open");
   landing.classList.add("hidden");
   revealWhy.style.display = "none";
+  revealFeatures.style.display = "none";
   revealBeta.style.display = "none";
   app.classList.add("visible");
   window.scrollTo(0, 0);
