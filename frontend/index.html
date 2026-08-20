@@ -862,19 +862,21 @@
 <section class="reveal-section" id="revealWhy">
   <span class="section-eyebrow">Why keydrops</span>
   <h2>Nobody ever replies with the tutorial.</h2>
-  <p>You've seen it a hundred times: someone posts an incredible cover, and the replies are all "tutorial please?" and
-     "how do you do this??" with nothing ever coming of it. keydrops skips the waiting entirely. Paste the link, and
-     it shows you the notes itself.</p>
+  <p>You've seen it a gazillion times: someone posts an incredible cover that you really wanna play, and the replies are all "tutorial please?" and
+     "how do you do this??" BUT NOBODY REPLIES. And let's be honest, nobody has all that time to wait. 
+    keydrops skips the part of waiting entirely! Paste the link, and
+     it shows you the notes itself, and although still in the works
+    it can produce a very close guess that helps you learn faster.</p>
   <div class="reveal-chips">
     <span class="reveal-chip">Upload a file, paste a link, or play live</span>
     <span class="reveal-chip">Falls note by note, synced to the audio</span>
-    <span class="reveal-chip">Note names in English or Spanish</span>
+    <span class="reveal-chip">Note names in both English or Spanish</span>
   </div>
 </section>
 
 <section class="reveal-section beta-section" id="revealBeta">
   <span class="section-eyebrow">Heads up</span>
-  <h2>Recording live? Still finding its footing.</h2>
+  <h2>Recording live? Still finding its footing haha.</h2>
   <p>Uploading a file or pasting a link usually means clean, already-recorded audio. A live mic in your room picks up
      everything else too, so for now, expect the most accurate results from a file or link, with live recording as
      the more experimental option while we keep tuning it.</p>
@@ -929,7 +931,7 @@
           <input type="text" id="tiktokUrl" placeholder="TikTok or YouTube link..." />
           <button class="control primary" id="tiktokGo">Transcribe</button>
         </div>
-        <div class="hint">Paste a link to a TikTok or YouTube piano video. We'll pull the audio and transcribe it the same way.</div>
+        <div class="hint">Paste a link to a TikTok piano video. We'll pull the audio and transcribe it the same way.</div>
       </div>
 
       <div id="recordPane">
@@ -946,10 +948,9 @@
           <div class="hint" id="recordHint">Record up to 30 seconds of live piano playing.</div>
         </div>
         <div class="beta-callout">
-          <strong>Recording live is still experimental.</strong> Room noise and mic placement make it noticeably less
+          <strong>Recording live unfortunately is still experimental.</strong> Room noise and mic placement make it noticeably less
           accurate than uploading a file or pasting a link. Those tend to already be cleanly recorded, while a live
-          mic picks up everything around it too. Try it, but expect more mistakes here than the other two options
-          while we keep improving it.
+          mic picks up everything around it too. free to try but it's still in the works :)
         </div>
       </div>
 
@@ -999,12 +1000,12 @@
 
       <div id="rotatePrompt">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M12 18h.01"></path></svg>
-        <span>Rotate your phone sideways for a bigger view of the keyboard and notes.</span>
+        <span>Rotate your phone sideways for a bigger view of the keyboard and notes!</span>
         <button id="rotateDismiss" title="Dismiss">&times;</button>
       </div>
 
       <div id="viewModeGroup">
-        <button class="view-mode-btn active" data-mode="falling">Falling Notes</button>
+        <button class="view-mode-btn active" data-mode="falling">Raindrop Notes</button>
         <button class="view-mode-btn" data-mode="sheet">Sheet Music</button>
         <button class="view-mode-btn" data-mode="both">Both <span class="beta-badge">Beta</span></button>
       </div>
@@ -1016,8 +1017,8 @@
       <div id="keyboard"></div>
 
       <div id="sheetMusicWrap">
-        <div id="sheetMusicHint">Sheet music is approximate. Rhythm is quantized from an estimated tempo, not a
-          precise transcription, and hand assignment uses the same guess as the falling notes.</div>
+        <div id="sheetMusicHint">Sheet music is in a very rough state haha. Rhythm is quantized from an estimated tempo, not a
+          precise transcription, and hand assignment uses the same guess as the falling notes, pretty rough if you ask me.</div>
         <div id="sheetMusicContainer"></div>
       </div>
 
