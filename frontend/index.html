@@ -548,6 +548,19 @@
   }
   .beta-callout strong { color: var(--text); font-weight: 600; }
 
+  #uploadError {
+    display: none;
+    margin-top: 1rem;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid rgba(231,76,60,0.35);
+    background: rgba(231,76,60,0.08);
+    border-radius: 10px;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  #uploadError.visible { display: block; }
+
   #rotatePrompt {
     display: none;
     align-items: center;
@@ -1002,6 +1015,8 @@
           mic picks up everything around it too. free to try but it's still in the works :)
         </div>
       </div>
+
+      <div id="uploadError"></div>
 
       <div id="resultsRoom">
       <video id="videoPreview" playsinline crossorigin="anonymous"></video>
@@ -1577,6 +1592,18 @@ document.getElementById("menuAboutItem").addEventListener("click", () => {
 const fileInput = document.getElementById("fileInput");
 const dropZone = document.getElementById("dropZone");
 const statusEl = document.getElementById("status");
+const uploadErrorEl = document.getElementById("uploadError");
+// statusEl lives inside #resultsRoom, which sits at opacity:0 until a
+// transcription actually succeeds — so a failure written there before that
+// point is invisible, not just easy to miss. uploadError lives outside it
+// specifically so a failed request always has somewhere visible to show up.
+function showUploadError(message) {
+  uploadErrorEl.textContent = message;
+  uploadErrorEl.classList.add("visible");
+}
+function hideUploadError() {
+  uploadErrorEl.classList.remove("visible");
+}
 const stage = document.getElementById("stage");
 const lanes = document.getElementById("lanes");
 const controls = document.getElementById("controls");
@@ -1773,7 +1800,7 @@ async function handleFile(file) {
     const data = await res.json();
     onTranscribed(data);
   } catch (err) {
-    statusEl.textContent = `Something went wrong: ${err.message}`;
+    showUploadError(`Something went wrong: ${err.message}`);
   } finally {
     hideLoadingScreen();
   }
@@ -1812,7 +1839,10 @@ async function handleTikTokLink() {
     }
     onTranscribed(data);
   } catch (err) {
-    statusEl.textContent = `Something went wrong: ${err.message}`;
+    // The raw error (below, in the console) is yt-dlp's own CLI output —
+    // useful for debugging, not for a non-technical user staring at the page.
+    console.error("Link transcription failed:", err.message);
+    showUploadError("Couldn't fetch that link. TikTok and YouTube sometimes block requests like this from a server — uploading the file directly is more reliable.");
   } finally {
     hideLoadingScreen();
   }
@@ -1965,13 +1995,14 @@ async function submitRecording(blob, mimeType) {
     const data = await res.json();
     onTranscribed(data);
   } catch (err) {
-    statusEl.textContent = `Something went wrong: ${err.message}`;
+    showUploadError(`Something went wrong: ${err.message}`);
   } finally {
     hideLoadingScreen();
   }
 }
 
 function resetStage() {
+  hideUploadError();
   stage.style.display = "none";
   controls.style.display = "none";
   seekRow.style.display = "none";
