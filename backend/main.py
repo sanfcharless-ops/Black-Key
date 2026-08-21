@@ -44,15 +44,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# Loaded once at process startup rather than per-request — predict() accepts
-# either a model path (which it loads fresh from disk every call) or an
+# Loaded once and reused rather than per-request — predict() accepts either
+# a model path (which it loads fresh from disk every call) or an
 # already-instantiated Model to reuse. Reloading the model on every single
 # transcription was spiking memory on each request instead of paying that
 # cost once, which is what was tripping Railway's memory limit.
+#
+# Lazy rather than loaded at import time: loading it eagerly would mean the
+# server has to successfully load the model just to start up and answer
+# /health, so if the memory ceiling were ever tight, every deploy would
+# crash before serving a single request instead of just the first real one.
 from basic_pitch.inference import Model
 from basic_pitch import ICASSP_2022_MODEL_PATH
 
-_basic_pitch_model = Model(ICASSP_2022_MODEL_PATH)
+_basic_pitch_model = None
+
+
+def get_basic_pitch_model():
+    global _basic_pitch_model
+    if _basic_pitch_model is None:
+        _basic_pitch_model = Model(ICASSP_2022_MODEL_PATH)
+    return _basic_pitch_model
+
 
 app = FastAPI(title="Piano Transcription API")
 
@@ -266,7 +279,7 @@ def extract_audio_from_video(video_path: str, output_wav_path: str):
         raise HTTPException(500, f"Couldn't extract audio from video: {result.stderr[-500:]}")
 
 
-def denoise_audio(audio_path: str) -> str:
+def denoise_audio(y, sr: int, audio_path: str) -> str:
     """
     Runs a spectral-gating noise reduction pass over the audio and writes
     the result next to the original as "<id>.denoised.wav". This cuts down
@@ -274,12 +287,15 @@ def denoise_audio(audio_path: str) -> str:
     just the piano — it's not source separation (it won't remove another
     instrument playing at the same time as the piano), just general
     background noise suppression.
+
+    Takes the already-loaded signal rather than loading the file itself —
+    run_transcription() needs the same signal again for tempo detection, and
+    a several-minute recording decoded into memory twice was a real chunk of
+    the peak memory a request used.
     """
-    import librosa
     import noisereduce as nr
     import soundfile as sf
 
-    y, sr = librosa.load(audio_path, sr=None, mono=True)
     # noisereduce's default "stationary" mode treats anything that doesn't
     # fluctuate as noise — which includes a sustained, held piano note, and
     # was gating those out entirely in testing (turning a clean recording
@@ -314,11 +330,12 @@ def run_transcription(audio_path: str):
     from basic_pitch.inference import predict
     import librosa
 
-    denoised_path = denoise_audio(audio_path)
+    y, sr = librosa.load(audio_path, sr=None, mono=True)
+    denoised_path = denoise_audio(y, sr, audio_path)
     try:
         model_output, midi_data, note_events = predict(
             denoised_path,
-            _basic_pitch_model,
+            get_basic_pitch_model(),
             onset_threshold=0.6,        # higher = fewer false-positive note starts
             frame_threshold=0.35,       # higher = less bleed/smearing between notes
             minimum_note_length=50,     # ms; drops very short spurious blips
@@ -338,15 +355,13 @@ def run_transcription(audio_path: str):
         for (start, end, pitch, velocity, _pitch_bend) in note_events
     ]
 
-    duration = librosa.get_duration(path=audio_path)
+    duration = len(y) / sr
 
-    # Best-effort tempo estimate, used client-side to quantize notes onto a
-    # rhythmic grid for sheet music rendering. Beat tracking is itself an
-    # estimate — it can drift on rubato/expressive playing — so treat the
-    # resulting notation as approximate, not a precise transcription.
+    # Best-effort tempo estimate, used for MIDI export playback tempo. Beat
+    # tracking is itself an estimate — it can drift on rubato/expressive
+    # playing — so treat it as approximate, not a precise reading.
     try:
-        y_tempo, sr_tempo = librosa.load(audio_path, sr=None, mono=True)
-        tempo_estimate, _ = librosa.beat.beat_track(y=y_tempo, sr=sr_tempo)
+        tempo_estimate, _ = librosa.beat.beat_track(y=y, sr=sr)
         tempo_bpm = round(float(tempo_estimate), 1) if tempo_estimate else 120.0
     except Exception:
         tempo_bpm = 120.0
