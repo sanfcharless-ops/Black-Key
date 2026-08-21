@@ -7,7 +7,6 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js"></script>
 <style>
   :root {
@@ -456,45 +455,6 @@
     user-select: none;
   }
   .source-tab.active { background: var(--accent); color: #12100d; }
-
-  /* ---------- View mode (falling notes / sheet music / both) ---------- */
-  #viewModeGroup {
-    display: none;
-    gap: 0.4rem;
-    margin-bottom: 0.75rem;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border-radius: 10px;
-    padding: 0.3rem;
-  }
-  .view-mode-btn {
-    flex: 1;
-    background: transparent;
-    border: none;
-    text-align: center;
-    padding: 0.5rem 0.6rem;
-    border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: inherit;
-    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .view-mode-btn.active { background: var(--accent); color: #12100d; }
-  .view-mode-btn.active .beta-badge { background: rgba(13,15,16,0.75); }
-
-  #sheetMusicWrap { display: none; background: #0e0e10; border-radius: 0 0 12px 12px; padding: 1rem; }
-  #sheetMusicHint {
-    font-size: 0.76rem; color: var(--muted); line-height: 1.5;
-    margin-bottom: 0.75rem; padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border);
-  }
-  #sheetMusicContainer { overflow: visible; }
-  #sheetMusicContainer svg { display: block; margin: 0 auto; max-width: 100%; }
-  .vf-note-active path, .vf-note-active .vf-notehead { fill: var(--accent) !important; }
 
   .upload-zone {
     border: 1px dashed rgba(255,255,255,0.15);
@@ -951,11 +911,6 @@
       <p>Move a song up or down and the audio actually changes pitch along with the falling notes, not just the visuals.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-eyebrow">Sheet Music</span>
-      <h3>Every transcription, also notation.</h3>
-      <p>The same performance rendered as readable sheet music, no separate step or upload required.</p>
-    </div>
-    <div class="feature-card">
       <span class="feature-eyebrow">Practice Mode</span>
       <h3>Loop the hard part until it's not.</h3>
       <p>Mark a section with A/B points and repeat just that passage, at whatever speed you need.</p>
@@ -1098,23 +1053,11 @@
         <button id="rotateDismiss" title="Dismiss">&times;</button>
       </div>
 
-      <div id="viewModeGroup">
-        <button class="view-mode-btn active" data-mode="falling">Raindrop Notes</button>
-        <button class="view-mode-btn" data-mode="sheet">Sheet Music</button>
-        <button class="view-mode-btn" data-mode="both">Both <span class="beta-badge">Beta</span></button>
-      </div>
-
       <div id="stage">
         <div id="stageBg"></div>
         <svg id="lanes" width="100%" height="100%" preserveAspectRatio="none"></svg>
       </div>
       <div id="keyboard"></div>
-
-      <div id="sheetMusicWrap">
-        <div id="sheetMusicHint">Sheet music is in a very rough state haha. Rhythm is quantized from an estimated tempo, not a
-          precise transcription, and hand assignment uses the same guess as the falling notes, pretty rough if you ask me.</div>
-        <div id="sheetMusicContainer"></div>
-      </div>
 
       <div id="status"></div>
       </div>
@@ -2034,8 +1977,6 @@ function resetStage() {
   seekRow.style.display = "none";
   document.getElementById("bgRow").style.display = "none";
   document.getElementById("keyboard").style.display = "none";
-  document.getElementById("viewModeGroup").style.display = "none";
-  document.getElementById("sheetMusicWrap").style.display = "none";
   document.getElementById("rotatePrompt").style.display = "none";
   transposeSemitones = 0;
   transposeVal.textContent = "0";
@@ -2078,14 +2019,11 @@ function onTranscribed(data) {
     : ` ${data.uses_remaining} free uses left this month.`;
   statusEl.textContent = `Done. ${data.notes.length} notes detected.${usesNote}`;
   renderNotes();
-  renderSheetMusic();
   stage.style.display = "block";
   document.getElementById("keyboard").style.display = "block";
   controls.style.display = "flex";
   document.getElementById("bgRow").style.display = "flex";
   seekRow.style.display = "flex";
-  document.getElementById("viewModeGroup").style.display = "flex";
-  applyViewMode();
   maybeShowRotatePrompt();
   enterResultsRoom();
 }
@@ -2125,6 +2063,21 @@ function transposedNotes() {
   });
 }
 
+// Playback drives this loop at 60fps, so renderNotes()/positionNotesAt() are
+// written to keep per-frame work to a fixed, tiny amount regardless of how
+// many notes a piece has:
+//  - all notes share one parent <g> (notesTrack) that gets a single transform
+//    per frame, instead of rewriting a transform attribute on every note
+//  - note timing/pitch/hand is cached in a plain array (noteMeta) instead of
+//    re-reading and re-parsing DOM attributes every frame
+//  - key lighting is diffed against the previous frame (litKeys) so only
+//    keys that actually changed get a classList write, via a pitch->element
+//    Map (keyByPitch) instead of a per-note attribute-selector DOM query
+let noteMeta = [];
+let notesTrack = null;
+let keyByPitch = new Map();
+let litKeys = new Map();
+
 function renderNotes() {
   const notes = transposedNotes();
   lanes.innerHTML = "";
@@ -2149,6 +2102,11 @@ function renderNotes() {
   lanes.setAttribute("viewBox", `0 0 ${stageWidth} ${stageHeight}`);
   const laneWidth = stageWidth / laneCount;
 
+  notesTrack = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  lanes.appendChild(notesTrack);
+  noteMeta = [];
+  litKeys = new Map();
+
   notes.forEach((n) => {
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const hand = n.hand;
@@ -2156,11 +2114,8 @@ function renderNotes() {
     const h = Math.max(4, n.duration * pxPerSecond);
     const y0 = -(h + n.start_time * pxPerSecond);
 
-    group.setAttribute("data-y0", y0);
-    group.setAttribute("data-pitch", n.pitch);
-    group.setAttribute("data-hand", hand);
-    group.setAttribute("data-start", n.start_time);
-    group.setAttribute("data-end", n.start_time + n.duration);
+    // Set once — never rewritten per frame. Only notesTrack's transform
+    // changes as playback advances.
     group.setAttribute("transform", `translate(0, ${y0})`);
 
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -2190,7 +2145,8 @@ function renderNotes() {
     label.textContent = pitchName(n.pitch);
     group.appendChild(label);
 
-    lanes.appendChild(group);
+    notesTrack.appendChild(group);
+    noteMeta.push({ pitch: n.pitch, hand, start: n.start_time, end: n.start_time + n.duration });
   });
 
   renderKeyboard();
@@ -2206,6 +2162,7 @@ function renderNotes() {
 function renderKeyboard() {
   const kb = document.getElementById("keyboard");
   kb.innerHTML = "";
+  keyByPitch = new Map();
   const whiteKeys = [];
   for (let p = MIN_PITCH; p <= MAX_PITCH; p++) if (!IS_BLACK[p % 12]) whiteKeys.push(p);
   const whiteWidth = 100 / whiteKeys.length;
@@ -2217,6 +2174,7 @@ function renderKeyboard() {
     key.style.left = (i * whiteWidth) + "%";
     key.style.width = whiteWidth + "%";
     kb.appendChild(key);
+    keyByPitch.set(p, key);
   });
 
   for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
@@ -2228,6 +2186,7 @@ function renderKeyboard() {
     key.style.left = ((whiteIndexBefore + 1) * whiteWidth - whiteWidth * 0.3) + "%";
     key.style.width = (whiteWidth * 0.6) + "%";
     kb.appendChild(key);
+    keyByPitch.set(p, key);
   }
 }
 
@@ -2328,7 +2287,7 @@ function setTranspose(v) {
   transposeSemitones = Math.max(-4, Math.min(5, v));
   transposeVal.textContent = (transposeSemitones > 0 ? "+" : "") + transposeSemitones;
   if (pitchShiftNode) pitchShiftNode.pitch = transposeSemitones;
-  if (rawNotes.length) { renderNotes(); renderSheetMusic(); }
+  if (rawNotes.length) renderNotes();
 }
 
 // ---------- Note name language (English letters vs. Spanish solfège) ----------
@@ -2372,22 +2331,27 @@ bgClear.addEventListener("click", () => {
 function positionNotesAt(elapsed) {
   const stageHeight = 320;
   const pxPerSecond = 90;
-  document.querySelectorAll("#lanes g").forEach((group) => {
-    const y0 = parseFloat(group.getAttribute("data-y0"));
-    group.setAttribute("transform", `translate(0, ${y0 + elapsed * pxPerSecond + stageHeight})`);
-  });
-  document.querySelectorAll(".white-key, .black-key").forEach(k => k.classList.remove("lit-left", "lit-right"));
-  document.querySelectorAll("#lanes g").forEach((group) => {
-    const start = parseFloat(group.getAttribute("data-start"));
-    const end = parseFloat(group.getAttribute("data-end"));
-    if (elapsed >= start && elapsed <= end) {
-      const pitch = group.getAttribute("data-pitch");
-      const hand = group.getAttribute("data-hand");
-      const keyEl = document.querySelector(`#keyboard [data-pitch="${pitch}"]`);
+  if (notesTrack) {
+    notesTrack.setAttribute("transform", `translate(0, ${elapsed * pxPerSecond + stageHeight})`);
+  }
+
+  const nowLit = new Map();
+  for (const n of noteMeta) {
+    if (elapsed >= n.start && elapsed <= n.end) nowLit.set(n.pitch, n.hand);
+  }
+  for (const [pitch, hand] of litKeys) {
+    if (nowLit.get(pitch) !== hand) {
+      const keyEl = keyByPitch.get(pitch);
+      if (keyEl) keyEl.classList.remove("lit-left", "lit-right");
+    }
+  }
+  for (const [pitch, hand] of nowLit) {
+    if (litKeys.get(pitch) !== hand) {
+      const keyEl = keyByPitch.get(pitch);
       if (keyEl) keyEl.classList.add(hand === "right" ? "lit-right" : "lit-left");
     }
-  });
-  updateSheetHighlight(elapsed);
+  }
+  litKeys = nowLit;
 }
 
 function tick() {
@@ -2611,195 +2575,15 @@ function loadSavedProject(p) {
   tempoBpm = p.tempoBpm || 120;
   resetStage();
   renderNotes();
-  renderSheetMusic();
   stage.style.display = "block";
   document.getElementById("keyboard").style.display = "block";
   controls.style.display = "flex";
-  document.getElementById("viewModeGroup").style.display = "flex";
-  document.querySelector('.view-mode-btn[data-mode="sheet"]').click();
   statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes. This is the transcription only. The original audio wasn't saved, so playback and the seekbar aren't available here.`;
   playBtn.disabled = true;
   seekRow.style.display = "none";
   enterResultsRoom();
 }
 
-// ---------- View mode: falling notes / sheet music / both ----------
-let viewMode = "falling";
-document.querySelectorAll(".view-mode-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".view-mode-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    viewMode = btn.dataset.mode;
-    applyViewMode();
-  });
-});
-function applyViewMode() {
-  const showFalling = viewMode === "falling" || viewMode === "both";
-  const showSheet = viewMode === "sheet" || viewMode === "both";
-  stage.style.display = showFalling ? "block" : "none";
-  document.getElementById("keyboard").style.display = showFalling ? "block" : "none";
-  document.getElementById("sheetMusicWrap").style.display = showSheet ? "block" : "none";
-}
-
-// ---------- Sheet music rendering (VexFlow) ----------
-// Approximate, not precise: note timing is quantized onto a 16th-note grid
-// derived from an estimated tempo (see backend tempo_bpm), long gaps between
-// notes are capped rather than represented with exact rests, and hand/staff
-// assignment reuses the same register-split heuristic as the falling notes.
-let sheetNoteElements = []; // [{el, start, end}] for sync highlighting in "Both" mode
-
-function midiToVexKey(midi) {
-  const letter = NOTE_NAMES_EN[midi % 12].toLowerCase();
-  const octave = Math.floor(midi / 12) - 1;
-  return `${letter}/${octave}`;
-}
-
-function nearestDurationTicks(ticks) {
-  const options = [1, 2, 3, 4, 6, 8];
-  let best = options[0], bestDiff = Infinity;
-  for (const o of options) {
-    const diff = Math.abs(o - ticks);
-    if (diff < bestDiff) { bestDiff = diff; best = o; }
-  }
-  return best;
-}
-function ticksToDurationStr(ticks) {
-  return { 1: "16", 2: "8", 3: "8d", 4: "q", 6: "qd", 8: "h" }[ticks] || "q";
-}
-
-function renderSheetMusic() {
-  const container = document.getElementById("sheetMusicContainer");
-  container.innerHTML = "";
-  sheetNoteElements = [];
-  lastAutoScrolledEl = null;
-
-  const notes = transposedNotes();
-  if (!notes.length || !window.Vex) return;
-
-  const VF = Vex.Flow;
-  const beatSec = 60 / (tempoBpm || 120);
-  const sixteenthSec = beatSec / 4;
-  const MAX_TICKS = 8;          // cap a single note/rest at a half note
-  const TICKS_PER_SYSTEM = 64;  // 4 measures of 4/4 per line, then wrap
-  const SYSTEM_HEIGHT = 220;
-
-  function toTicks(t) { return Math.max(0, Math.round(t / sixteenthSec)); }
-
-  function buildChords(staffNotes) {
-    const byTick = new Map();
-    staffNotes.forEach((n) => {
-      const tick = toTicks(n.start_time);
-      if (!byTick.has(tick)) byTick.set(tick, []);
-      byTick.get(tick).push(n);
-    });
-    return [...byTick.entries()].sort((a, b) => a[0] - b[0]).map(([tick, group]) => ({ tick, group }));
-  }
-
-  const trebleChords = buildChords(notes.filter((n) => n.hand === "right"));
-  const bassChords = buildChords(notes.filter((n) => n.hand === "left"));
-  if (!trebleChords.length && !bassChords.length) return;
-
-  function makeStaveNote(group, tick, nextTick, clef) {
-    const available = Math.max(1, nextTick - tick);
-    const renderTicks = nearestDurationTicks(Math.min(available, MAX_TICKS));
-    const duration = ticksToDurationStr(renderTicks);
-    const uniquePitches = [...new Set(group.map((n) => n.pitch))].sort((a, b) => a - b);
-    const keys = uniquePitches.map(midiToVexKey);
-    const staveNote = new VF.StaveNote({ keys, duration, clef });
-    uniquePitches.forEach((p, idx) => {
-      if (NOTE_NAMES_EN[p % 12].includes("#")) staveNote.addModifier(new VF.Accidental("#"), idx);
-    });
-    return {
-      staveNote,
-      renderTicks,
-      start: Math.min(...group.map((n) => n.start_time)),
-      end: Math.max(...group.map((n) => n.start_time + n.duration)),
-    };
-  }
-
-  const lastTick = Math.max(
-    trebleChords.length ? trebleChords[trebleChords.length - 1].tick : 0,
-    bassChords.length ? bassChords[bassChords.length - 1].tick : 0
-  );
-  const numSystems = Math.max(1, Math.ceil((lastTick + 4) / TICKS_PER_SYSTEM));
-
-  // Wide enough to use the available space, but a real line of notation
-  // gets harder to read past a point — cap it rather than stretching one
-  // system across an ultra-wide window.
-  const systemWidth = Math.min(1100, Math.max(500, container.clientWidth - 20 || 900));
-
-  const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(systemWidth + 30, numSystems * SYSTEM_HEIGHT + 20);
-  const ctx = renderer.getContext();
-
-  function drawSystemVoice(chords, stave, clef, startTick, endTick) {
-    const inRange = chords.filter((c) => c.tick >= startTick && c.tick < endTick);
-    if (!inRange.length) return;
-    const built = [];
-    let totalTicks16 = 0;
-    for (let i = 0; i < inRange.length; i++) {
-      const nextTick = i + 1 < inRange.length ? inRange[i + 1].tick : endTick;
-      const entry = makeStaveNote(inRange[i].group, inRange[i].tick, nextTick, clef);
-      built.push(entry);
-      totalTicks16 += entry.renderTicks;
-    }
-    const voice = new VF.Voice({ num_beats: Math.max(1, Math.ceil(totalTicks16 / 4)), beat_value: 4 });
-    voice.setStrict(false);
-    voice.addTickables(built.map((b) => b.staveNote));
-    new VF.Formatter().joinVoices([voice]).format([voice], systemWidth - 60);
-    voice.draw(ctx, stave);
-    built.forEach((b) => {
-      const el = b.staveNote.getSVGElement ? b.staveNote.getSVGElement() : null;
-      if (el) sheetNoteElements.push({ el, start: b.start, end: b.end });
-    });
-  }
-
-  for (let sys = 0; sys < numSystems; sys++) {
-    const startTick = sys * TICKS_PER_SYSTEM;
-    const endTick = startTick + TICKS_PER_SYSTEM;
-    const y = 20 + sys * SYSTEM_HEIGHT;
-
-    const trebleStave = new VF.Stave(10, y, systemWidth);
-    trebleStave.addClef("treble");
-    trebleStave.setContext(ctx).draw();
-
-    const bassStave = new VF.Stave(10, y + 100, systemWidth);
-    bassStave.addClef("bass");
-    bassStave.setContext(ctx).draw();
-
-    try {
-      const brace = new VF.StaveConnector(trebleStave, bassStave);
-      brace.setType(VF.StaveConnector.type.BRACE);
-      brace.setContext(ctx).draw();
-      const line = new VF.StaveConnector(trebleStave, bassStave);
-      line.setType(VF.StaveConnector.type.SINGLE_LEFT);
-      line.setContext(ctx).draw();
-    } catch (e) { /* cosmetic only — skip the brace if this VexFlow build's API differs */ }
-
-    drawSystemVoice(trebleChords, trebleStave, "treble", startTick, endTick);
-    drawSystemVoice(bassChords, bassStave, "bass", startTick, endTick);
-  }
-}
-
-let lastAutoScrolledEl = null;
-function updateSheetHighlight(elapsed) {
-  let firstActive = null;
-  sheetNoteElements.forEach(({ el, start, end }) => {
-    const active = elapsed >= start && elapsed <= end;
-    el.classList.toggle("vf-note-active", active);
-    if (active && !firstActive) firstActive = el;
-  });
-  // Follow along during playback in Sheet Music / Both view — only nudge the
-  // page when the active note has actually left the visible area, so it
-  // doesn't fight a manual scroll every animation frame.
-  if (playing && firstActive && firstActive !== lastAutoScrolledEl && (viewMode === "sheet" || viewMode === "both")) {
-    const rect = firstActive.getBoundingClientRect();
-    if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
-      firstActive.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    lastAutoScrolledEl = firstActive;
-  }
-}
 </script>
 </body>
 </html>
