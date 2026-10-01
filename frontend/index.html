@@ -1523,8 +1523,16 @@ void main() {
 }
 })();
 
-// Point this at your deployed backend.
-const API_URL = "https://black-key-production.up.railway.app";
+// Point this at your deployed backend: the Hugging Face Space's
+// https://<username>-keydrops-api.hf.space address (the deploy workflow
+// prints the exact one in its run summary).
+const API_URL = "https://HF_USERNAME-keydrops-api.hf.space";
+
+// Free Hugging Face Spaces go to sleep after a couple of days with no
+// visitors, and take a minute or so to wake. Poke the server the moment
+// the page opens, so it's usually awake by the time someone has picked a
+// file or pasted a link.
+fetch(`${API_URL}/health`).catch(() => {});
 
 // Each browser gets its own persistent ID so the free-use limit is per
 // device, not one shared bucket for every visitor to the site.
@@ -1805,11 +1813,21 @@ function hideLoadingScreen() {
 // fetch() itself only throws when the server couldn't be reached at all
 // (down, asleep, or the request was cut off), as opposed to answering with
 // an error. Those need a different message than "the server said no".
+const SERVER_WAKING_MESSAGE = "The keydrops server is waking up (it naps when nobody has used it for a while). Give it a minute and try again.";
+
 function describeRequestError(err) {
-  if (err instanceof TypeError) {
-    return "Couldn't reach the keydrops server. It may be restarting. Give it a minute and try again.";
-  }
+  if (err instanceof TypeError) return SERVER_WAKING_MESSAGE;
   return err.message;
+}
+
+// Turns a non-OK response into an Error carrying the backend's own
+// explanation when there is one. 502/503/504 with no explanation is the
+// host saying the server isn't up yet, i.e. still waking or restarting.
+async function responseError(res) {
+  const body = await res.json().catch(() => ({}));
+  if (body.detail) return new Error(body.detail);
+  if ([502, 503, 504].includes(res.status)) return new Error(SERVER_WAKING_MESSAGE);
+  return new Error(`Server error (${res.status})`);
 }
 
 async function handleFile(file) {
@@ -1838,8 +1856,7 @@ async function handleFile(file) {
   try {
     const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     onTranscribed(data);
@@ -1874,8 +1891,7 @@ async function handleTikTokLink() {
       body: JSON.stringify({ url }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     if (data.audio_url) {
@@ -2036,8 +2052,7 @@ async function submitRecording(blob, mimeType) {
   try {
     const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     onTranscribed(data);
@@ -2089,8 +2104,7 @@ async function handleSheetFile(file) {
   try {
     const res = await fetch(`${API_URL}/transcribe-sheet?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     data.notes.forEach((n) => { n.start_time += SHEET_LEAD_IN_SECONDS; });

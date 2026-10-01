@@ -1,0 +1,30 @@
+name: Deploy backend to Hugging Face
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+      - ".github/scripts/deploy_hf_space.py"
+  # Also runnable by hand from the Actions tab ("Run workflow").
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -U huggingface_hub
+      - name: Upload backend/ to the Space
+        env:
+          # A Hugging Face access token with "Write" permission, saved under
+          # Settings -> Secrets and variables -> Actions -> Secrets.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          # Optional: change the Space's name with an Actions *variable*
+          # named HF_SPACE_NAME. Defaults to keydrops-api.
+          HF_SPACE_NAME: ${{ vars.HF_SPACE_NAME }}
+        run: python .github/scripts/deploy_hf_space.py

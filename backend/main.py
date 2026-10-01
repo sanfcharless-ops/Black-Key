@@ -191,7 +191,7 @@ async def transcribe(file: UploadFile = File(...), user_id: str | None = None):
 SUPPORTED_LINK_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be"]
 URL_RE = re.compile(r"https?://\S+|(?:www\.|m\.|vm\.|vt\.)?(?:tiktok\.com|youtube\.com|youtu\.be)/\S+", re.IGNORECASE)
 
-# Optional, set on the server (Railway variables) only if needed:
+# Optional, set on the server (the Space's "Variables and secrets") only if needed:
 # - YTDLP_COOKIES: the contents of a Netscape-format cookies.txt exported
 #   from a logged-in browser. YouTube increasingly answers datacenter IPs
 #   with "Sign in to confirm you're not a bot"; cookies get past that.
