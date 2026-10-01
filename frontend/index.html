@@ -486,6 +486,8 @@
   #linkPane .hint { color: var(--muted); font-size: 0.82rem; margin-top: 0.6rem; }
 
   #recordPane { display: none; }
+  #sheetPane { display: none; }
+  #sheetPane .tip { color: var(--muted); font-size: 0.78rem; line-height: 1.55; margin-top: 0.8rem; }
   .record-zone {
     border: 1px dashed rgba(255,255,255,0.15);
     border-radius: 12px;
@@ -882,7 +884,7 @@
 
 <div id="landing">
   <h1>keydrops</h1>
-  <p>Upload a piano recording, paste a TikTok or YouTube link, or record live, and watch it fall into place, note by note, played back exactly as you recorded it.</p>
+  <p>Upload a piano recording, paste a TikTok or YouTube link, record live, or drop in sheet music, and watch it fall into place, note by note.</p>
   <button class="cta" id="getStarted">Get started</button>
   <div class="scroll-hint" id="scrollHint" title="Scroll for more">
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 8l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -898,7 +900,7 @@
      it shows you the notes itself, and although still in the works
     it can produce a very close guess that helps you learn faster.</p>
   <div class="reveal-chips">
-    <span class="reveal-chip">Upload a file, paste a link, or play live</span>
+    <span class="reveal-chip">Upload a file, paste a link, play live, or scan sheet music</span>
     <span class="reveal-chip">Falls note by note, synced to the audio</span>
     <span class="reveal-chip">Note names in both English or Spanish</span>
   </div>
@@ -912,6 +914,11 @@
       <span class="feature-eyebrow">AI Transcription</span>
       <h3>Every note, lifted from the recording.</h3>
       <p>Powered by Basic Pitch, an open piano-transcription model, listening for pitch, timing, and how hard each note was played.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-eyebrow">Sheet Music</span>
+      <h3>Can't read the score? Watch it instead.</h3>
+      <p>Upload a PDF or photo of sheet music and it gets scanned into falling notes, with a piano playing along. MusicXML and MIDI files come through note-perfect.</p>
     </div>
     <div class="feature-card">
       <span class="feature-eyebrow">Hand Separation</span>
@@ -955,7 +962,7 @@
     <div class="app-header">
       <div class="app-title-wrap">
         <p class="app-title">keydrops</p>
-        <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, or record live to transcribe it</p>
+        <p class="app-sub">Upload a recording, paste a TikTok or YouTube link, record live, or upload sheet music</p>
       </div>
       <div class="menu-wrap">
         <button class="menu-btn" id="menuBtn" title="Menu" aria-haspopup="true" aria-expanded="false">
@@ -977,6 +984,7 @@
       <div id="sourceTabs">
         <div class="source-tab active" id="tabFile">Upload file</div>
         <div class="source-tab" id="tabLink">Video link</div>
+        <div class="source-tab" id="tabSheet">Sheet music</div>
         <div class="source-tab" id="tabRecord">Record <span class="beta-badge">Beta</span></div>
       </div>
 
@@ -993,7 +1001,19 @@
           <input type="text" id="tiktokUrl" placeholder="TikTok or YouTube link..." />
           <button class="control primary" id="tiktokGo">Transcribe</button>
         </div>
-        <div class="hint">Paste a link to a TikTok piano video. We'll pull the audio and transcribe it the same way.</div>
+        <div class="hint">Paste a TikTok or YouTube link (the whole "share" text is fine). We'll pull the audio and transcribe it the same way.</div>
+      </div>
+
+      <div id="sheetPane">
+        <div class="upload-zone" id="sheetDropZone">
+          <input type="file" id="sheetInput" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.musicxml,.xml,.mxl,.mid,.midi,application/pdf,image/*" />
+          <div>Click to choose sheet music, or drag it here</div>
+          <div class="hint">PDF, PNG, JPG, MusicXML, or MIDI (up to 40MB)</div>
+        </div>
+        <div class="tip">
+          For the most accurate result, upload a <b>MusicXML</b> or <b>MIDI</b> file if you have one (MuseScore can export both); those come through exactly as written.
+          PDFs and photos get scanned, which works best on a clean, straight-on, well-lit page. Scanning a long score can take a minute or two.
+        </div>
       </div>
 
       <div id="recordPane">
@@ -1503,8 +1523,16 @@ void main() {
 }
 })();
 
-// Point this at your deployed backend.
-const API_URL = "https://black-key-production.up.railway.app";
+// Point this at your deployed backend: the Hugging Face Space's
+// https://<username>-keydrops-api.hf.space address (the deploy workflow
+// prints the exact one in its run summary).
+const API_URL = "https://otochi-keydrops-api.hf.space";
+
+// Free Hugging Face Spaces go to sleep after a couple of days with no
+// visitors, and take a minute or so to wake. Poke the server the moment
+// the page opens, so it's usually awake by the time someone has picked a
+// file or pasted a link.
+fetch(`${API_URL}/health`).catch(() => {});
 
 // Each browser gets its own persistent ID so the free-use limit is per
 // device, not one shared bucket for every visitor to the site.
@@ -1586,7 +1614,7 @@ document.getElementById("menuProItem").addEventListener("click", () => {
 });
 document.getElementById("menuAboutItem").addEventListener("click", () => {
   setMenuOpen(false);
-  alert("keydrops turns a recording, a TikTok/YouTube link, or live playing into falling notes on an 88-key keyboard.");
+  alert("keydrops turns a recording, a TikTok/YouTube link, live playing, or sheet music into falling notes on an 88-key keyboard.");
 });
 
 const fileInput = document.getElementById("fileInput");
@@ -1627,12 +1655,15 @@ fileInput.addEventListener("change", () => {
 const tabFile = document.getElementById("tabFile");
 const tabLink = document.getElementById("tabLink");
 const tabRecord = document.getElementById("tabRecord");
+const tabSheet = document.getElementById("tabSheet");
+const sheetPane = document.getElementById("sheetPane");
 const filePane = document.getElementById("filePane");
 const linkPane = document.getElementById("linkPane");
 const recordPane = document.getElementById("recordPane");
 const TABS = [
   { tab: tabFile, pane: filePane },
   { tab: tabLink, pane: linkPane },
+  { tab: tabSheet, pane: sheetPane },
   { tab: tabRecord, pane: recordPane },
 ];
 function selectSourceTab(active) {
@@ -1646,6 +1677,7 @@ function selectSourceTab(active) {
 tabFile.addEventListener("click", () => selectSourceTab(tabFile));
 tabLink.addEventListener("click", () => selectSourceTab(tabLink));
 tabRecord.addEventListener("click", () => selectSourceTab(tabRecord));
+tabSheet.addEventListener("click", () => selectSourceTab(tabSheet));
 
 const MIN_PITCH = 21, MAX_PITCH = 108;
 const MIDDLE_C = 60; // heuristic split point for left/right hand coloring
@@ -1675,6 +1707,9 @@ const HAND_STALE_SECONDS = 2.5;     // a silent hand's tracked position goes sta
 
 function assignHands(notes) {
   if (!notes.length) return notes;
+  // Sheet music already says which hand plays each note (treble staff vs.
+  // bass staff). That's the real answer, so don't second-guess it.
+  if (notes.every(n => n.hand === "left" || n.hand === "right")) return notes;
   const sorted = [...notes].sort((a, b) => a.start_time - b.start_time);
 
   // Start each hand's tracker from where this piece actually lives, not a
@@ -1748,17 +1783,24 @@ let loadingMessageInterval = null;
 const loadingScreenEl = document.getElementById("loadingScreen");
 const loadingMessageEl = document.getElementById("loadingMessage");
 
-function showLoadingScreen(initialMessage) {
-  loadingMessageEl.textContent = initialMessage || LOADING_MESSAGES[0];
+const SHEET_LOADING_MESSAGES = [
+  "Reading the sheet music…",
+  "Finding every staff and bar line…",
+  "Working out the rhythms…",
+  "Tuning the piano…",
+];
+
+function showLoadingScreen(initialMessage, messages = LOADING_MESSAGES) {
+  loadingMessageEl.textContent = initialMessage || messages[0];
   loadingMessageEl.style.opacity = 1;
   loadingScreenEl.classList.add("visible");
   let i = 0;
   clearInterval(loadingMessageInterval);
   loadingMessageInterval = setInterval(() => {
-    i = (i + 1) % LOADING_MESSAGES.length;
+    i = (i + 1) % messages.length;
     loadingMessageEl.style.opacity = 0;
     setTimeout(() => {
-      loadingMessageEl.textContent = LOADING_MESSAGES[i];
+      loadingMessageEl.textContent = messages[i];
       loadingMessageEl.style.opacity = 1;
     }, 300);
   }, 3600);
@@ -1766,6 +1808,26 @@ function showLoadingScreen(initialMessage) {
 function hideLoadingScreen() {
   clearInterval(loadingMessageInterval);
   loadingScreenEl.classList.remove("visible");
+}
+
+// fetch() itself only throws when the server couldn't be reached at all
+// (down, asleep, or the request was cut off), as opposed to answering with
+// an error. Those need a different message than "the server said no".
+const SERVER_WAKING_MESSAGE = "The keydrops server is waking up (it naps when nobody has used it for a while). Give it a minute and try again.";
+
+function describeRequestError(err) {
+  if (err instanceof TypeError) return SERVER_WAKING_MESSAGE;
+  return err.message;
+}
+
+// Turns a non-OK response into an Error carrying the backend's own
+// explanation when there is one. 502/503/504 with no explanation is the
+// host saying the server isn't up yet, i.e. still waking or restarting.
+async function responseError(res) {
+  const body = await res.json().catch(() => ({}));
+  if (body.detail) return new Error(body.detail);
+  if ([502, 503, 504].includes(res.status)) return new Error(SERVER_WAKING_MESSAGE);
+  return new Error(`Server error (${res.status})`);
 }
 
 async function handleFile(file) {
@@ -1794,13 +1856,12 @@ async function handleFile(file) {
   try {
     const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     onTranscribed(data);
   } catch (err) {
-    showUploadError(`Something went wrong: ${err.message}`);
+    showUploadError(`Something went wrong: ${describeRequestError(err)}`);
   } finally {
     hideLoadingScreen();
   }
@@ -1830,19 +1891,21 @@ async function handleTikTokLink() {
       body: JSON.stringify({ url }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     if (data.audio_url) {
-      player.src = data.audio_url;
+      // Always load it from API_URL. Older backends sent a full URL that
+      // could come back as http:// behind Railway's proxy, which an https
+      // page refuses to play; using only the path sidesteps that.
+      player.src = API_URL + new URL(data.audio_url, API_URL).pathname;
     }
     onTranscribed(data);
   } catch (err) {
-    // The raw error (below, in the console) is yt-dlp's own CLI output —
-    // useful for debugging, not for a non-technical user staring at the page.
+    // The backend turns yt-dlp's raw output into a plain-English reason
+    // (bot check, IP block, private video...), so show that directly.
     console.error("Link transcription failed:", err.message);
-    showUploadError("Couldn't fetch that link. TikTok and YouTube sometimes block requests like this from a server — uploading the file directly is more reliable.");
+    showUploadError(describeRequestError(err));
   } finally {
     hideLoadingScreen();
   }
@@ -1989,16 +2052,169 @@ async function submitRecording(blob, mimeType) {
   try {
     const res = await fetch(`${API_URL}/transcribe?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error (${res.status})`);
+      throw await responseError(res);
     }
     const data = await res.json();
     onTranscribed(data);
   } catch (err) {
-    showUploadError(`Something went wrong: ${err.message}`);
+    showUploadError(`Something went wrong: ${describeRequestError(err)}`);
   } finally {
     hideLoadingScreen();
   }
+}
+
+// ---------- Sheet music ----------
+// The backend reads the score (exactly, for MusicXML/MIDI; by optical
+// music recognition for PDFs/photos) and returns timed notes. There's no
+// recording to sync to, so a piano rendering of those notes is generated
+// right here in the browser and loaded into the same <audio> player
+// everything else uses. That way seek, speed, A/B loop, and transpose all
+// work on sheet music without any special cases.
+const sheetInput = document.getElementById("sheetInput");
+const sheetDropZone = document.getElementById("sheetDropZone");
+sheetDropZone.addEventListener("click", () => sheetInput.click());
+sheetDropZone.addEventListener("dragover", (e) => { e.preventDefault(); sheetDropZone.style.borderColor = "var(--accent)"; });
+sheetDropZone.addEventListener("dragleave", () => { sheetDropZone.style.borderColor = "rgba(255,255,255,0.15)"; });
+sheetDropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  sheetDropZone.style.borderColor = "rgba(255,255,255,0.15)";
+  if (e.dataTransfer.files.length) handleSheetFile(e.dataTransfer.files[0]);
+});
+sheetInput.addEventListener("change", () => {
+  if (sheetInput.files.length) handleSheetFile(sheetInput.files[0]);
+  sheetInput.value = ""; // so picking the same file again still triggers
+});
+
+// Silence before the first note, so the opening notes visibly fall in
+// from the top instead of starting already sitting on the keys.
+const SHEET_LEAD_IN_SECONDS = 2;
+
+async function handleSheetFile(file) {
+  statusEl.textContent = "Reading the sheet music...";
+  showLoadingScreen(null, SHEET_LOADING_MESSAGES);
+  resetStage();
+
+  videoPreview.style.display = "none";
+  activePlayer = player;
+  bindPlayerOnce(activePlayer);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch(`${API_URL}/transcribe-sheet?user_id=${encodeURIComponent(CLIENT_ID)}`, { method: "POST", body: formData });
+    if (!res.ok) {
+      throw await responseError(res);
+    }
+    const data = await res.json();
+    data.notes.forEach((n) => { n.start_time += SHEET_LEAD_IN_SECONDS; });
+    showLoadingScreen("Tuning the piano…", ["Tuning the piano…", "Almost there…"]);
+    const wav = await synthesizePiano(data.notes);
+    player.src = URL.createObjectURL(wav);
+    onTranscribed(data);
+  } catch (err) {
+    console.error("Sheet music failed:", err);
+    showUploadError(`Something went wrong: ${describeRequestError(err)}`);
+  } finally {
+    hideLoadingScreen();
+  }
+}
+
+// Salamander Grand Piano samples (CC-BY 3.0, Alexander Holm), the same set
+// Tone.js's own piano demos use. One sample every minor third; the
+// Sampler repitches the notes in between.
+const PIANO_SAMPLE_BASE = "https://tonejs.github.io/audio/salamander/";
+const PIANO_SAMPLE_NOTES = ["A0", "C1", "D#1", "F#1", "A1", "C2", "D#2", "F#2", "A2", "C3", "D#3", "F#3",
+  "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5", "F#5", "A5", "C6", "D#6", "F#6", "A6", "C7", "D#7", "F#7", "A7", "C8"];
+let pianoSamplesPromise = null;
+
+// Resolves to { noteName: AudioBuffer } or null if the samples couldn't be
+// fetched, in which case playback falls back to a plain synth so the
+// feature still works offline or if the sample host is down.
+function loadPianoSamples() {
+  if (pianoSamplesPromise) return pianoSamplesPromise;
+  const urls = {};
+  PIANO_SAMPLE_NOTES.forEach((n) => { urls[n] = n.replace("#", "s") + ".mp3"; });
+  pianoSamplesPromise = new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 20000);
+    try {
+      const buffers = new Tone.ToneAudioBuffers({
+        urls,
+        baseUrl: PIANO_SAMPLE_BASE,
+        onload: () => {
+          clearTimeout(timeout);
+          const map = {};
+          PIANO_SAMPLE_NOTES.forEach((n) => {
+            const b = buffers.has(n) ? buffers.get(n) : null;
+            if (b && b.loaded) map[n] = b.get();
+          });
+          resolve(Object.keys(map).length ? map : null);
+        },
+        onerror: () => { clearTimeout(timeout); resolve(null); },
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      resolve(null);
+    }
+  }).then((samples) => {
+    if (!samples) pianoSamplesPromise = null; // let a later upload retry
+    return samples;
+  });
+  return pianoSamplesPromise;
+}
+
+async function synthesizePiano(notes) {
+  const samples = await loadPianoSamples();
+  const end = notes.reduce((m, n) => Math.max(m, n.start_time + n.duration), 0) + 2.5;
+  const rendered = await Tone.Offline(() => {
+    const out = new Tone.Limiter(-1).toDestination();
+    let instrument;
+    if (samples) {
+      instrument = new Tone.Sampler({ urls: samples, release: 1.2, volume: -6 }).connect(out);
+    } else {
+      instrument = new Tone.PolySynth(Tone.Synth, {
+        maxPolyphony: 256,
+        volume: -14,
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.005, decay: 0.6, sustain: 0.2, release: 0.6 },
+      }).connect(out);
+    }
+    notes.forEach((n) => {
+      instrument.triggerAttackRelease(
+        Tone.Frequency(n.pitch, "midi").toFrequency(),
+        Math.max(0.05, n.duration),
+        n.start_time,
+        Math.max(0.2, Math.min(1, (n.velocity || 80) / 127)),
+      );
+    });
+  }, end, 1, 44100);
+  return audioBufferToWavBlob(rendered.get());
+}
+
+// 16-bit mono PCM WAV.
+function audioBufferToWavBlob(audioBuffer) {
+  const data = audioBuffer.getChannelData(0);
+  const sampleRate = audioBuffer.sampleRate;
+  const view = new DataView(new ArrayBuffer(44 + data.length * 2));
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + data.length * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);              // PCM
+  view.setUint16(22, 1, true);              // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // byte rate
+  view.setUint16(32, 2, true);              // block align
+  view.setUint16(34, 16, true);             // bits per sample
+  writeStr(36, "data");
+  view.setUint32(40, data.length * 2, true);
+  for (let i = 0; i < data.length; i++) {
+    const s = Math.max(-1, Math.min(1, data[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([view.buffer], { type: "audio/wav" });
 }
 
 function resetStage() {
@@ -2026,6 +2242,7 @@ function enterResultsRoom() {
   filePane.style.display = "none";
   linkPane.style.display = "none";
   recordPane.style.display = "none";
+  sheetPane.style.display = "none";
   newTranscriptionBtn.classList.add("visible");
   resultsRoom.classList.add("visible");
 }
@@ -2041,10 +2258,12 @@ newTranscriptionBtn.addEventListener("click", () => {
 });
 
 let tempoBpm = 120;
+let currentSource = "audio"; // "sheet" when the notes came from a score
 
 function onTranscribed(data) {
   rawNotes = assignHands(data.notes);
   tempoBpm = data.tempo_bpm || 120;
+  currentSource = data.source || "audio";
   const usesNote = data.uses_remaining === null || data.uses_remaining === undefined
     ? ""
     : ` ${data.uses_remaining} free uses left this month.`;
@@ -2055,6 +2274,9 @@ function onTranscribed(data) {
   controls.style.display = "flex";
   document.getElementById("bgRow").style.display = "flex";
   seekRow.style.display = "flex";
+  if (currentSource === "sheet") {
+    statusEl.textContent += " Playback is a piano reading the score.";
+  }
   maybeShowRotatePrompt();
   enterResultsRoom();
 }
@@ -2531,6 +2753,7 @@ document.getElementById("saveProjectBtn").addEventListener("click", () => {
     notes: rawNotes,
     tempoBpm: tempoBpm,
     noteCount: rawNotes.length,
+    source: currentSource,
   });
   const trimmed = projects.slice(0, MAX_SAVED_PROJECTS);
   if (saveProjectsList(trimmed)) {
@@ -2609,10 +2832,33 @@ function loadSavedProject(p) {
   stage.style.display = "block";
   document.getElementById("keyboard").style.display = "block";
   controls.style.display = "flex";
+  currentSource = p.source || "audio";
+  enterResultsRoom();
+
+  // A score never had a recording to begin with, so its piano playback can
+  // simply be generated again. Recordings can't: the audio wasn't saved.
+  if (currentSource === "sheet") {
+    statusEl.textContent = `Loading "${p.name}"...`;
+    playBtn.disabled = true;
+    seekRow.style.display = "none";
+    videoPreview.style.display = "none";
+    activePlayer = player;
+    bindPlayerOnce(player);
+    synthesizePiano(rawNotes).then((wav) => {
+      player.src = URL.createObjectURL(wav);
+      playBtn.disabled = false;
+      seekRow.style.display = "flex";
+      statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes.`;
+    }).catch((err) => {
+      console.error("Couldn't regenerate piano audio:", err);
+      statusEl.textContent = `Loaded "${p.name}" from My Projects, but the piano playback couldn't be generated.`;
+    });
+    return;
+  }
+
   statusEl.textContent = `Loaded "${p.name}" from My Projects. ${p.noteCount} notes. This is the transcription only. The original audio wasn't saved, so playback and the seekbar aren't available here.`;
   playBtn.disabled = true;
   seekRow.style.display = "none";
-  enterResultsRoom();
 }
 
 </script>

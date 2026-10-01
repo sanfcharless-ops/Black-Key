@@ -6,5 +6,11 @@ setuptools<81
 basic-pitch[onnx]==0.4.0
 librosa==0.10.2
 pydantic==2.9.2
-yt-dlp>=2024.8.6
+# [default] pulls in yt-dlp-ejs, which YouTube extraction has needed (along
+# with deno, see Dockerfile) since late 2025. Plain "yt-dlp" leaves it out
+# and every YouTube link fails. [curl-cffi] lets TikTok requests look like
+# a real browser. The Dockerfile also upgrades yt-dlp on every boot.
+yt-dlp[default,curl-cffi]>=2026.8.19
 noisereduce>=3.0.0
+music21>=9.1,<10
+pretty_midi>=0.2.10
