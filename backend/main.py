@@ -39,10 +39,12 @@ import tempfile
 import uuid
 from typing import Dict, List
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+from sheet_music import SHEET_EXTENSIONS, SheetMusicError, transcribe_sheet
 
 # Loaded once and reused rather than per-request — predict() accepts either
 # a model path (which it loads fresh from disk every call) or an
@@ -100,6 +102,10 @@ class NoteEvent(BaseModel):
     start_time: float
     duration: float
     velocity: int
+    # Only set for sheet music, where the staff a note is written on says
+    # which hand plays it. Audio transcriptions leave it None and the
+    # frontend works it out from pitch.
+    hand: str | None = None
 
 
 class TranscriptionResult(BaseModel):
@@ -109,6 +115,7 @@ class TranscriptionResult(BaseModel):
     is_video: bool
     audio_url: str | None = None
     tempo_bpm: float = 120.0
+    source: str = "audio"
 
 
 class TranscribeURLPayload(BaseModel):
@@ -182,6 +189,52 @@ async def transcribe(file: UploadFile = File(...), user_id: str | None = None):
 
 
 SUPPORTED_LINK_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be"]
+URL_RE = re.compile(r"https?://\S+|(?:www\.|m\.|vm\.|vt\.)?(?:tiktok\.com|youtube\.com|youtu\.be)/\S+", re.IGNORECASE)
+
+# Optional, set on the server (Railway variables) only if needed:
+# - YTDLP_COOKIES: the contents of a Netscape-format cookies.txt exported
+#   from a logged-in browser. YouTube increasingly answers datacenter IPs
+#   with "Sign in to confirm you're not a bot"; cookies get past that.
+# - YTDLP_PROXY: a proxy URL (ideally residential) for when TikTok blocks
+#   the server's IP outright.
+YTDLP_COOKIES = os.environ.get("YTDLP_COOKIES", "").strip()
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "").strip()
+
+
+def extract_link(text: str) -> str | None:
+    """People paste whatever their share sheet gives them, which for TikTok
+    is often "Check out this video! https://vm.tiktok.com/...". Pull the
+    actual link out of that, and add the https:// if it was left off."""
+    match = URL_RE.search(text.strip())
+    if not match:
+        return None
+    url = match.group(0).rstrip(").,!?'\"")
+    if not url.lower().startswith("http"):
+        url = "https://" + url
+    return url
+
+
+def friendly_ytdlp_error(stderr: str) -> str:
+    """yt-dlp's raw output is useless to someone who just pasted a link.
+    Translate the common failures into something they can act on."""
+    err = stderr.lower()
+    if "sign in to confirm" in err or "not a bot" in err:
+        return ("YouTube is asking our server to prove it isn't a bot, so it won't hand over the audio. "
+                "Downloading the video and uploading the file works around this.")
+    if "ip address is blocked" in err or ("blocked" in err and "tiktok" in err):
+        return ("TikTok is blocking our server from fetching videos right now. "
+                "Save the video to your phone and upload the file instead.")
+    if "private" in err:
+        return "That video is private, so it can't be fetched."
+    if "age" in err and ("restricted" in err or "confirm your age" in err):
+        return "That video is age-restricted, so it can't be fetched without signing in."
+    if "unsupported url" in err:
+        return "That doesn't look like a link to a single TikTok or YouTube video."
+    if "video unavailable" in err or "not available" in err or "404" in err:
+        return "That video isn't available. It may have been deleted, or it's blocked in the server's region."
+    if "larger than max-filesize" in err or "file is larger" in err:
+        return f"That video is too long to fetch (the limit is {MAX_FILE_SIZE_MB}MB of audio)."
+    return "Couldn't fetch that video. Uploading the file directly is the most reliable option."
 # TikTok has been observed blocking requests from cloud/datacenter IPs
 # (including Railway's) with "Your IP address is blocked" — that's
 # TikTok's own anti-bot system, not fixable from our side short of
@@ -190,9 +243,9 @@ SUPPORTED_LINK_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be"]
 
 
 @app.post("/transcribe-url", response_model=TranscriptionResult)
-async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_id: str | None = None):
-    url = payload.url.strip()
-    if not any(domain in url for domain in SUPPORTED_LINK_DOMAINS):
+async def transcribe_url(payload: TranscribeURLPayload, user_id: str | None = None):
+    url = extract_link(payload.url)
+    if not url or not any(domain in url.lower() for domain in SUPPORTED_LINK_DOMAINS):
         raise HTTPException(400, "Only TikTok and YouTube links are supported right now.")
 
     uid = get_user_id(user_id)
@@ -202,24 +255,44 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
     audio_path = os.path.join(tempfile.gettempdir(), f"{audio_id}.wav")
     output_template = os.path.join(tempfile.gettempdir(), f"{audio_id}.%(ext)s")
 
+    cmd = [
+        "yt-dlp",
+        "-x", "--audio-format", "wav",
+        "--max-filesize", f"{MAX_FILE_SIZE_MB}M",
+        # A YouTube link opened from a playlist carries &list=..., and
+        # without this yt-dlp downloads the entire playlist.
+        "--no-playlist",
+        "-o", output_template,
+    ]
+    if "tiktok.com" in url.lower():
+        # Look like a real browser at the TLS level (needs curl-cffi, see
+        # requirements.txt). TikTok rejects plain clients far more often.
+        cmd += ["--impersonate", "chrome"]
+    cookies_path = None
+    if YTDLP_COOKIES:
+        cookies_path = os.path.join(tempfile.gettempdir(), f"{audio_id}.cookies.txt")
+        # Railway's variable editor tends to store a pasted multi-line
+        # cookies.txt with literal "\n"s, so turn those back into newlines.
+        with open(cookies_path, "w") as f:
+            f.write(YTDLP_COOKIES.replace("\\n", "\n") + "\n")
+        cmd += ["--cookies", cookies_path]
+    if YTDLP_PROXY:
+        cmd += ["--proxy", YTDLP_PROXY]
+    cmd.append(url)
+
     try:
-        result = subprocess.run(
-            [
-                "yt-dlp",
-                "-x", "--audio-format", "wav",
-                "--max-filesize", f"{MAX_FILE_SIZE_MB}M",
-                "-o", output_template,
-                url,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "Timed out fetching that video.")
+    finally:
+        if cookies_path and os.path.exists(cookies_path):
+            os.remove(cookies_path)
 
     if result.returncode != 0 or not os.path.exists(audio_path):
-        raise HTTPException(400, f"Couldn't fetch that video: {result.stderr[-500:]}")
+        # Full output goes to the server log for debugging; the user gets
+        # a sentence they can actually do something with.
+        print(f"yt-dlp failed for {url}:\n{result.stderr[-2000:]}")
+        raise HTTPException(400, friendly_ytdlp_error(result.stderr))
 
     try:
         notes, duration, tempo_bpm = run_transcription(audio_path)
@@ -229,7 +302,11 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
 
     asyncio.create_task(_delete_after_delay(audio_path))
 
-    audio_url = str(request.base_url).rstrip("/") + f"/audio/{audio_id}.wav"
+    # A path, not a full URL: behind Railway's proxy, request.base_url can
+    # come out as http:// even though the site is https://, and browsers
+    # block or mangle that mixed-content audio. The frontend prefixes this
+    # with the API_URL it already knows.
+    audio_url = f"/audio/{audio_id}.wav"
     return TranscriptionResult(
         notes=notes,
         duration_seconds=duration,
@@ -237,6 +314,52 @@ async def transcribe_url(payload: TranscribeURLPayload, request: Request, user_i
         is_video=True,
         audio_url=audio_url,
         tempo_bpm=tempo_bpm,
+    )
+
+
+MAX_SHEET_FILE_SIZE_MB = 40
+
+
+@app.post("/transcribe-sheet", response_model=TranscriptionResult)
+def transcribe_sheet_music(file: UploadFile = File(...), user_id: str | None = None):
+    """Sheet music in (PDF, image, MusicXML or MIDI), falling notes out.
+    There's no recording to play back, so the frontend synthesizes piano
+    audio from the returned notes.
+
+    A plain (sync) def on purpose: scanning a PDF can take a minute, and
+    FastAPI runs sync endpoints in a worker thread, so one slow score
+    doesn't freeze every other request."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in SHEET_EXTENSIONS:
+        raise HTTPException(
+            400, f"Unsupported file type: {ext or 'unknown'}. Use a PDF, PNG/JPG, MusicXML, or MIDI file."
+        )
+
+    uid = get_user_id(user_id)
+    check_and_consume_usage(uid)
+
+    contents = file.file.read()
+    if len(contents) > MAX_SHEET_FILE_SIZE_MB * 1024 * 1024:
+        raise HTTPException(400, f"File too large. Max size is {MAX_SHEET_FILE_SIZE_MB}MB.")
+
+    tmp_input = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}{ext}")
+    with open(tmp_input, "wb") as f:
+        f.write(contents)
+    try:
+        notes, duration, tempo_bpm = transcribe_sheet(tmp_input)
+    except SheetMusicError as e:
+        raise HTTPException(422, str(e))
+    finally:
+        if os.path.exists(tmp_input):
+            os.remove(tmp_input)
+
+    return TranscriptionResult(
+        notes=[NoteEvent(**n) for n in notes],
+        duration_seconds=duration,
+        uses_remaining=uses_remaining(uid),
+        is_video=False,
+        tempo_bpm=tempo_bpm,
+        source="sheet",
     )
 
 
